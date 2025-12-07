@@ -1,6 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[codz]
+*.py[cod]
 *$py.class
 
 # C extensions
@@ -46,7 +46,7 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
-*.py.cover
+*.py,cover
 .hypothesis/
 .pytest_cache/
 cover/
@@ -205,3 +205,44 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Data files
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Model checkpoints and weights
+models/*.pt
+models/*.pth
+models/*.bin
+models/*.safetensors
+*.ckpt
+
+# Results and outputs
+results/*.png
+results/*.jpg
+results/*.pdf
+results/*.csv
+results/*.json
+
+# Jupyter notebooks
+*.ipynb_checkpoints/
+
+# Secrets and credentials
+secrets.json
+credentials.json
+*.key
+
+# Large data files
+*.zip
+*.tar.gz
+*.gz
+*.model
+
+# macOS
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
