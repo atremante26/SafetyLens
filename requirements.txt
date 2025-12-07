@@ -1,0 +1,26 @@
+# Core ML libraries
+torch>=2.0.0
+transformers>=4.30.0
+scikit-learn>=1.3.0
+
+# Data handling
+pandas>=2.0.0
+numpy>=1.24.0
+datasets>=2.14.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Explainability
+captum>=0.6.0
+shap>=0.42.0
+lime>=0.2.0
+
+# Utilities
+tqdm>=4.65.0
+jupyter>=1.0.0
+notebook>=6.5.0
+
+# Optional but helpful
+scipy>=1.10.0
