@@ -17,6 +17,7 @@ class MultiTaskRoBERTa(nn.Module):
         - Q6_policy_guidelines_overall
     '''
     def __init__(self, model_name=MODEL_NAME, num_labels=NUM_LABELS, dropout=0.1):
+        super().__init__()
         # Shared encoder
         self.roberta = RobertaModel.from_pretrained(model_name)
         hidden_size = self.roberta.config.hidden_size 
@@ -43,12 +44,11 @@ class MultiTaskRoBERTa(nn.Module):
 
         # Return 4 predictions
         return {
-            'Q_overall': self.classifier_overall(cls_output),
-            'Q2_harmful': self.classifier_harmful(cls_output),
-            'Q3_bias': self.classifier_bias(cls_output),
-            'Q6_policy': self.classifier_policy(cls_output)
+            'Q_overall': self.overall_head(cls_output),              
+            'Q2_harmful': self.harmful_content_head(cls_output),     
+            'Q3_bias': self.bias_head(cls_output),               
+            'Q6_policy': self.policy_guidelines_head(cls_output)    
         }
-    
 
 class MultiTaskDataset(Dataset):
     '''
