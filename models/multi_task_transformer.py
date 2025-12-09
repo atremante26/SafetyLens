@@ -44,12 +44,11 @@ class MultiTaskRoBERTa(nn.Module):
 
         # Return 4 predictions
         return {
-            'Q_overall': self.classifier_overall(cls_output),
-            'Q2_harmful': self.classifier_harmful(cls_output),
-            'Q3_bias': self.classifier_bias(cls_output),
-            'Q6_policy': self.classifier_policy(cls_output)
+            'Q_overall': self.overall_head(cls_output),              
+            'Q2_harmful': self.harmful_content_head(cls_output),     
+            'Q3_bias': self.bias_head(cls_output),               
+            'Q6_policy': self.policy_guidelines_head(cls_output)    
         }
-    
 
 class MultiTaskDataset(Dataset):
     '''
