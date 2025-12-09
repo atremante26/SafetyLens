@@ -17,6 +17,7 @@ class MultiTaskRoBERTa(nn.Module):
         - Q6_policy_guidelines_overall
     '''
     def __init__(self, model_name=MODEL_NAME, num_labels=NUM_LABELS, dropout=0.1):
+        super().__init__()
         # Shared encoder
         self.roberta = RobertaModel.from_pretrained(model_name)
         hidden_size = self.roberta.config.hidden_size 
