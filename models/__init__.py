@@ -6,7 +6,7 @@ from .multi_task_transformer import (
 
 from .losses import (
     FocalLoss,
-    create_focal_loss_functions
+    create_focal_loss
 )
 
 __all__ = [
@@ -14,5 +14,5 @@ __all__ = [
     'MultiTaskDataset',
     'load_model',
     'FocalLoss',
-    'create_focal_loss_functions'
+    'create_focal_loss'
 ]

@@ -52,22 +52,21 @@ class FocalLoss(nn.Module):
         else:  # 'none'
             return focal_loss
     
-    def create_focal_loss_functions(train_dataframe=None, gamma=3.0, device='cuda'):
+def create_focal_loss(train_dataframe=None, gamma=3.0, device='cuda'):
+    # Class weights: [Safe, Ambiguous, Unsafe]
+    # Moderate weights since Focal Loss provides additional focusing via gamma
+    # Ambiguous class gets 10-20x higher weight to compensate for rarity
     
-        # Class weights: [Safe, Ambiguous, Unsafe]
-        # Moderate weights since Focal Loss provides additional focusing via gamma
-        # Ambiguous class gets 10-20x higher weight to compensate for rarity
-        
-        weights_overall = torch.tensor([0.7, 10.0, 1.3], dtype=torch.float).to(device)
-        weights_harmful = torch.tensor([0.5, 15.0, 1.8], dtype=torch.float).to(device)
-        weights_bias = torch.tensor([0.4, 20.0, 2.0], dtype=torch.float).to(device)
-        weights_policy = torch.tensor([0.4, 20.0, 2.0], dtype=torch.float).to(device)
-        
-        weighted_losses = {
-            'Q_overall': FocalLoss(alpha=weights_overall, gamma=gamma),
-            'Q2_harmful': FocalLoss(alpha=weights_harmful, gamma=gamma),
-            'Q3_bias': FocalLoss(alpha=weights_bias, gamma=gamma),
-            'Q6_policy': FocalLoss(alpha=weights_policy, gamma=gamma)
-        }
-        
-        return weighted_losses
+    weights_overall = torch.tensor([0.7, 10.0, 1.3], dtype=torch.float).to(device)
+    weights_harmful = torch.tensor([0.5, 15.0, 1.8], dtype=torch.float).to(device)
+    weights_bias = torch.tensor([0.4, 20.0, 2.0], dtype=torch.float).to(device)
+    weights_policy = torch.tensor([0.4, 20.0, 2.0], dtype=torch.float).to(device)
+    
+    weighted_losses = {
+        'Q_overall': FocalLoss(alpha=weights_overall, gamma=gamma),
+        'Q2_harmful': FocalLoss(alpha=weights_harmful, gamma=gamma),
+        'Q3_bias': FocalLoss(alpha=weights_bias, gamma=gamma),
+        'Q6_policy': FocalLoss(alpha=weights_policy, gamma=gamma)
+    }
+    
+    return weighted_losses
