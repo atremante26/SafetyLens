@@ -20,7 +20,9 @@ def split_by_conversation(
     val_size: float = 0.2,
     test_size: float = 0.1,
     random_state: int = 42,
-    stratify_by: str = 'Q_overall_3class'
+    stratify_by: str = 'Q_overall_3class',
+    balance: bool = True,
+    balance_params: dict = None
 ):
     """
     Split data by conversation (item_id) to prevent data leakage.
@@ -32,6 +34,8 @@ def split_by_conversation(
         test_size: Proportion for test (default 0.1)
         random_state: Random seed for reproducibility
         stratify_by: Target variable to use for stratification
+        balance: If True, apply undersampling to balance classes (default True)
+        balance_params: Dict with 'target_safe' and 'target_unsafe' for balancing.
         
     Returns:
         Dictionary with keys 'train', 'val', 'test'
@@ -70,9 +74,59 @@ def split_by_conversation(
         'val': df[df['item_id'].isin(val_convs)].copy(),
         'test': df[df['item_id'].isin(test_convs)].copy()
     }
+    
+    # Balance
+    if balance:
+        if balance_params is None:
+            balance_params = {'target_safe': 5000, 'target_unsafe': 5000}
+
+        # Train Set
+        splits['train'] = balance_dataset(
+            splits['train'], 
+            target_safe=balance_params['target_safe'],
+            target_unsafe=balance_params['target_unsafe']
+        )
+
+        # Val Set
+        val_safe = int(balance_params['target_safe'] * 0.2)
+        val_unsafe = int(balance_params['target_unsafe'] * 0.2)
+        splits['val'] = balance_dataset(
+            splits['val'],
+            target_safe=val_safe,
+            target_unsafe=val_unsafe
+        )
+
+        # Test Set
+        test_safe = int(balance_params['target_safe'] * 0.2)
+        test_unsafe = int(balance_params['target_unsafe'] * 0.2)
+        splits['test'] = balance_dataset(
+            splits['test'],
+            target_safe=test_safe,
+            target_unsafe=test_unsafe
+        )
 
     return splits
 
+def balance_dataset(df: pd.DataFrame, target_safe=5000, target_unsafe=5000):
+    '''
+    Balance dataset by undersampling Safe and Unsafe while keeping all Ambiguous
+    '''
+
+    # Seperate by class
+    safe = df[df['Q_overall_3class'] == 0]
+    ambiguous = df[df['Q_overall_3class'] == 1]
+    unsafe = df[df['Q_overall_3class'] == 2]
+
+    # Undersample Safe and Unsafe
+    safe_balanced = safe.sample(n=min(target_safe, len(safe)), random_state=42)
+    unsafe_balanced = unsafe.sample(n=min(target_unsafe, len(unsafe)), random_state=42)
+
+    # Combine and shuffle
+    balanced_df = pd.concat([safe_balanced, ambiguous, unsafe_balanced])
+    balanced_df = balanced_df.sample(fac=1, random_state=42).reset_index(drop=True)
+
+    return balanced_df
+    
 
 def load_data_sklearn(
     target: str = 'Q_overall_3class',
@@ -83,19 +137,12 @@ def load_data_sklearn(
     vector_size: int = 100,
     window: int = 5,
     min_count: int = 2,
-    workers: int = 4
+    workers: int = 4,
+    balance: bool = True,
+    balance_params: dict = None
 ):
     """
     Load data for sklearn models (Logistic Regression).
-    
-    Args:
-        target: Which target variable to predict
-        train_size, val_size, test_size: Split proportions
-        random_state: Random seed
-        
-    Returns:
-        X_train, X_val, X_test, y_train, y_val, y_test
-        (X are text strings, y are integer labels)
     """
     # Load data
     df = pd.read_csv(DATA_PATH)
@@ -107,7 +154,9 @@ def load_data_sklearn(
         val_size=val_size,
         test_size=test_size,
         random_state=random_state,
-        stratify_by=target
+        stratify_by=target,
+        balance=balance,
+        balance_params=balance_params
     )
     
     # Extract text and labels
@@ -161,19 +210,12 @@ def load_data_transformers(
     train_size: float = 0.7,
     val_size: float = 0.2,
     test_size: float = 0.1,
-    random_state: int = 42
+    random_state: int = 42,
+    balance: bool = True,
+    balance_params: dict = None
 ):
     """
     Load data for single-task transformer models.
-    
-    Args:
-        target: Which target variable to predict
-        train_size, val_size, test_size: Split proportions
-        random_state: Random seed
-        
-    Returns:
-        Dictionary with 'train', 'val', 'test' DataFrames
-        Each DataFrame has 'text' and 'label' columns
     """
     # Load data
     df = pd.read_csv(DATA_PATH)
@@ -185,7 +227,9 @@ def load_data_transformers(
         val_size=val_size,
         test_size=test_size,
         random_state=random_state,
-        stratify_by=target
+        stratify_by=target,
+        balance=balance,
+        balance_params=balance_params
     )
     
     # Rename target column to 'label' for HuggingFace compatibility
@@ -200,18 +244,12 @@ def load_multi_task_data(
     train_size: float = 0.7,
     val_size: float = 0.2,
     test_size: float = 0.1,
-    random_state: int = 42
+    random_state: int = 42,
+    balance: bool = True,
+    balance_params: dict = None
 ):
     """
     Load data for multi-task transformer (predicts all 4 targets simultaneously).
-    
-    Args:
-        train_size, val_size, test_size: Split proportions
-        random_state: Random seed
-        
-    Returns:
-        Dictionary with 'train', 'val', 'test' DataFrames
-        Each DataFrame has 'text' and all 4 target columns
     """
     # Load data
     df = pd.read_csv(DATA_PATH)
@@ -223,7 +261,9 @@ def load_multi_task_data(
         val_size=val_size,
         test_size=test_size,
         random_state=random_state,
-        stratify_by='Q_overall_3class'  # Use overall safety as stratification
+        stratify_by='Q_overall_3class',  # Use overall safety as stratification
+        balance=balance,
+        balance_params=balance_params
     )
     
     # Keep text + all 4 targets
