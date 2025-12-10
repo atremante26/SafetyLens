@@ -3,14 +3,14 @@ import numpy as np
 from captum.attr import IntegratedGradients
 
 
-def prepare_input(text, tokenizer, device):
+def input(text, tokenizer, device):
     # Tokenize text and prepare for model input 
     encoding = tokenizer(
         text,
         max_length=512,
-        padding='max_length',
-        truncation=True,
-        return_tensors='pt'
+        padding='max_length', # Pad to 512 tokens
+        truncation=True, # Cut off if longer than 512
+        return_tensors='pt' # Return PyTorch tensors
     )
     return {
         'input_ids': encoding['input_ids'].to(device),
@@ -19,30 +19,32 @@ def prepare_input(text, tokenizer, device):
     }
 
 
-def get_prediction(model, input_ids, attention_mask, task='Q_overall'):
+def predict(model, input_ids, attention_mask, task='Q_overall'):
     # Get model prediction for a specific task
-    model.eval()
+
+    model.eval() # Evaluation mode
+
     with torch.no_grad():
         outputs = model(input_ids, attention_mask)
         logits = outputs[task]
-        probs = torch.softmax(logits, dim=1)
-        pred_class = torch.argmax(probs, dim=1)
+        probs = torch.softmax(logits, dim=1) # Convert to probabilities
+        pred_class = torch.argmax(probs, dim=1) # Get highest probability class
     
     return {
-        'predicted_class': pred_class.item(),
-        'probabilities': probs[0].cpu().numpy(),
+        'predicted_class': pred_class.item(), # Tensor -> Int
+        'probabilities': probs[0].cpu().numpy(), # Probs -> NumPy array
         'class_names': ['Safe', 'Ambiguous', 'Unsafe']
     }
 
 
-def construct_baseline(input_ids, attention_mask, baseline_token_id=1):
+def baseline(input_ids, attention_mask, baseline_token_id=1):
     # Construct baseline (all padding tokens) for Integrated Gradients
     ref_input_ids = torch.ones_like(input_ids) * baseline_token_id
     ref_attention_mask = torch.zeros_like(attention_mask)
     return (input_ids, attention_mask), (ref_input_ids, ref_attention_mask)
 
 
-def compute_attribution_metrics(attributions):
+def metrics(attributions):
     # Compute statistics for attribution analysis (mean, std, max, sparsity)
     non_zero_attrs = attributions[attributions != 0]
     
@@ -64,26 +66,26 @@ def compute_ig_attributions(text, model, tokenizer, task='Q_overall', n_steps=50
     Returns dictionary with tokens, attributions, predictions, and metrics.
     """
     # Prepare input
-    inputs = prepare_input(text, tokenizer, device)
+    inputs = input(text, tokenizer, device)
     input_ids = inputs['input_ids']
     attention_mask = inputs['attention_mask']
     tokens = inputs['tokens']
     
     # Get prediction
-    prediction = get_prediction(model, input_ids, attention_mask, task)
+    prediction = predict(model, input_ids, attention_mask, task)
     predicted_class = prediction['predicted_class']
     
     # Construct baseline
     (input_ids, attention_mask), (ref_input_ids, ref_attention_mask) = \
-        construct_baseline(input_ids, attention_mask)
+        baseline(input_ids, attention_mask)
     
     # Define forward function for this task
-    def forward_func(ids, mask):
+    def forward(ids, mask):
         outputs = model(ids, mask)
         return outputs[task]
     
     # Initialize Integrated Gradients
-    ig = IntegratedGradients(forward_func)
+    ig = IntegratedGradients(forward)
     
     # Compute attributions
     attributions, delta = ig.attribute(
@@ -110,5 +112,5 @@ def compute_ig_attributions(text, model, tokenizer, task='Q_overall', n_steps=50
         'class_name': prediction['class_names'][predicted_class],
         'probabilities': prediction['probabilities'],
         'convergence_delta': delta.item(),
-        'metrics': compute_attribution_metrics(token_attributions)
+        'metrics': metrics(token_attributions)
     }

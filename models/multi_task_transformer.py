@@ -58,18 +58,25 @@ class MultiTaskDataset(Dataset):
     '''
     def __init__(self, dataframe, tokenizer, max_length=512):
         self.texts = dataframe['text'].values
+        
+        # 4 labels
         self.labels_overall = dataframe['Q_overall_3class'].values
         self.labels_harmful = dataframe['Q2_harmful_content_overall_3class'].values
         self.labels_bias = dataframe['Q3_bias_overall_3class'].values
         self.labels_policy = dataframe['Q6_policy_guidelines_overall_3class'].values
+
         self.tokenizer = tokenizer
         self.max_length = max_length
         
     def __len__(self):
+        # Tells DataLoader how many examples exist
         return len(self.texts)
     
     def __getitem__(self, idx):
+        # Gets text at position idx
         text = self.texts[idx]
+
+        # Tokenize text
         encoding = self.tokenizer(
             text,
             max_length=self.max_length,
