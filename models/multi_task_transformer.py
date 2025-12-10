@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn 
+import numpy as np
 from transformers import RobertaModel, RobertaTokenizer
+from sklearn.utils.class_weight import compute_class_weight
 from torch.utils.data import Dataset
 
 # Model Config
@@ -87,9 +89,9 @@ class MultiTaskDataset(Dataset):
 
 
 def load_model(model_path=None, device='cuda'):
-    """
+    '''
     Load trained multi-task model
-    """
+    '''
     model = MultiTaskRoBERTa(num_labels=NUM_LABELS)
     
     if model_path:
@@ -102,3 +104,36 @@ def load_model(model_path=None, device='cuda'):
     tokenizer = RobertaTokenizer.from_pretrained(MODEL_NAME)
     
     return model, tokenizer
+
+
+def weighted_loss_functions(train_df, device='cuda'):
+    '''
+    Create weighted cross-entropy loss functions for each task (addresses class imbalance)
+    '''
+    task_columns = {
+        'Q_overall': 'Q_overall_3class',
+        'Q2_harmful': 'Q2_harmful_content_overall_3class',
+        'Q3_bias': 'Q3_bias_overall_3class',
+        'Q6_policy': 'Q6_policy_guidelines_overall_3class'
+    }
+    
+    weighted_losses = {}
+    
+    for task_key, col_name in task_columns.items():
+        # Get label distribution
+        labels = train_df[col_name].values
+        
+        # Compute balanced class weights
+        weights = compute_class_weight(
+            'balanced',
+            classes=np.array([0, 1, 2]),
+            y=labels
+        )
+        
+        # Convert to tensor
+        weights_tensor = torch.tensor(weights, dtype=torch.float).to(device)
+        
+        # Create weighted loss
+        weighted_losses[task_key] = nn.CrossEntropyLoss(weight=weights_tensor)
+
+    return weighted_losses
