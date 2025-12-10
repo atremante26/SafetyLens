@@ -113,7 +113,7 @@ def load_model(model_path=None, device='cuda'):
     return model, tokenizer
 
 
-def weighted_loss_functions(train_df, device='cuda'):
+def create_auto_weighted_loss(train_df, device='cuda'):
     '''
     Create weighted cross-entropy loss functions for each task (addresses class imbalance)
     '''
