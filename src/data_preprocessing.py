@@ -123,7 +123,7 @@ def balance_dataset(df: pd.DataFrame, target_safe=5000, target_unsafe=5000):
 
     # Combine and shuffle
     balanced_df = pd.concat([safe_balanced, ambiguous, unsafe_balanced])
-    balanced_df = balanced_df.sample(fac=1, random_state=42).reset_index(drop=True)
+    balanced_df = balanced_df.sample(frac=1, random_state=42).reset_index(drop=True)
 
     return balanced_df
     
