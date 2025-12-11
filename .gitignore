@@ -219,13 +219,6 @@ models/*.bin
 models/*.safetensors
 *.ckpt
 
-# Results and outputs
-results/*.png
-results/*.jpg
-results/*.pdf
-results/*.csv
-results/*.json
-
 # Jupyter notebooks
 *.ipynb_checkpoints/
 
