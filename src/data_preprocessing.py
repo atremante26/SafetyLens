@@ -104,11 +104,6 @@ def split_by_conversation(
         'test': df[df['item_id'].isin(test_convs)].copy()
     }
     
-    print(f"\nIndividual ratings per split:")
-    print(f"  Train ratings: {len(splits['train']):,}")
-    print(f"  Val ratings: {len(splits['val']):,}")
-    print(f"  Test ratings: {len(splits['test']):,}")
-    
     # Apply balancing if requested
     if balance:
         if balance_params is None:
