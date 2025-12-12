@@ -210,7 +210,6 @@ __marimo__/
 data/raw/*
 !data/raw/.gitkeep
 !data/raw/README.md
-data/processed/*
 !data/processed/.gitkeep
 
 # Model checkpoints and weights
@@ -219,13 +218,6 @@ models/*.pth
 models/*.bin
 models/*.safetensors
 *.ckpt
-
-# Results and outputs
-results/*.png
-results/*.jpg
-results/*.pdf
-results/*.csv
-results/*.json
 
 # Jupyter notebooks
 *.ipynb_checkpoints/
