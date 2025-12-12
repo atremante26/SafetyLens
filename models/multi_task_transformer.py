@@ -5,15 +5,21 @@ from torch.utils.data import Dataset
 
 class MultiTaskRoBERTa(nn.Module):
     '''
-    Input Text -> ROBERTa Encoder (shared) -> [CLS] token -> 4 separate heads -> 4 predictions
+    Input Text -> ROBERTa Encoder (shared) -> [CLS] token -> 2 or 4 separate heads -> 2 or 4 predictions
     Tasks:
         - Q_overall
         - Q2_harmful_content_overall
         - Q3_bias_overall
         - Q6_policy_guidelines_overall
     '''
-    def __init__(self, num_labels=2):
+    def __init__(self, num_labels=2, tasks=None):
         super(MultiTaskRoBERTa, self).__init__()
+        
+        # Default to all 4 tasks if not specified
+        if tasks is None:
+            tasks = ['Q_overall', 'Q2_harmful', 'Q3_bias', 'Q6_policy']
+        
+        self.tasks = tasks
         
         # Shared encoder
         self.roberta = RobertaModel.from_pretrained('roberta-base')
@@ -21,11 +27,10 @@ class MultiTaskRoBERTa(nn.Module):
         # Dropout
         self.dropout = nn.Dropout(0.1)
         
-        # 4 classification heads
-        self.overall_head = nn.Linear(768, num_labels)
-        self.harmful_content_head = nn.Linear(768, num_labels)
-        self.bias_head = nn.Linear(768, num_labels)
-        self.policy_guidelines_head = nn.Linear(768, num_labels)
+        # Create only the heads needed
+        self.heads = nn.ModuleDict()
+        for task in tasks:
+            self.heads[task] = nn.Linear(768, num_labels)
     
     def forward(self, input_ids, attention_mask):
         # Get embeddings
@@ -37,44 +42,53 @@ class MultiTaskRoBERTa(nn.Module):
         # Apply dropout
         pooled_output = self.dropout(pooled_output)
         
-        # Get predictions for each task
-        logits_overall = self.overall_head(pooled_output)
-        logits_harmful = self.harmful_content_head(pooled_output)
-        logits_bias = self.bias_head(pooled_output)
-        logits_policy = self.policy_guidelines_head(pooled_output)
+        # Get predictions for each active task
+        logits = {}
+        for task in self.tasks:
+            logits[task] = self.heads[task](pooled_output)
         
-        return {
-            'Q_overall': logits_overall,
-            'Q2_harmful': logits_harmful,
-            'Q3_bias': logits_bias,
-            'Q6_policy': logits_policy
-        }
+        return logits
 
 
 class MultiTaskDataset(Dataset):
-    def __init__(self, dataframe, tokenizer, max_length=512):
-        '''
-        Dataset for multi-task learning with 4 target variables
-        '''
+    '''
+    Flexible dataset that supports 2 or 4 tasks
+    '''
+    def __init__(self, dataframe, tokenizer, max_length=512, tasks=None):
         self.data = dataframe
         self.tokenizer = tokenizer
         self.max_length = max_length
         
+        # Default to all 4 tasks if not specified
+        if tasks is None:
+            tasks = ['Q_overall', 'Q2_harmful', 'Q3_bias', 'Q6_policy']
+        
+        self.tasks = tasks
+        
+        # Map task names to column names
+        self.task_to_col = {
+            'Q_overall': 'Q_overall_binary',
+            'Q2_harmful': 'Q2_harmful_binary',
+            'Q3_bias': 'Q3_bias_binary',
+            'Q6_policy': 'Q6_policy_binary'
+        }
+        
     def __len__(self):
-        # Tells DataLoader how many examples exist
         return len(self.data)
     
     def __getitem__(self, idx):
-        # Gets text at position idx
         text = str(self.data.iloc[idx]['text'])
         
-        # Binary labels
-        label_overall = int(self.data.iloc[idx]['Q_overall_binary'])
-        label_harmful = int(self.data.iloc[idx]['Q2_harmful_binary'])
-        label_bias = int(self.data.iloc[idx]['Q3_bias_binary'])
-        label_policy = int(self.data.iloc[idx]['Q6_policy_binary'])
+        # Get labels for active tasks only
+        labels = {}
+        for task in self.tasks:
+            col_name = self.task_to_col[task]
+            labels[f'labels_{task}'] = torch.tensor(
+                int(self.data.iloc[idx][col_name]), 
+                dtype=torch.long
+            )
         
-        # Tokenize text
+        # Tokenize
         encoding = self.tokenizer(
             text,
             add_special_tokens=True,
@@ -84,11 +98,10 @@ class MultiTaskDataset(Dataset):
             return_tensors='pt'
         )
         
-        return {
+        result = {
             'input_ids': encoding['input_ids'].flatten(),
-            'attention_mask': encoding['attention_mask'].flatten(),
-            'labels_overall': torch.tensor(label_overall, dtype=torch.long),
-            'labels_harmful': torch.tensor(label_harmful, dtype=torch.long),
-            'labels_bias': torch.tensor(label_bias, dtype=torch.long),
-            'labels_policy': torch.tensor(label_policy, dtype=torch.long)
+            'attention_mask': encoding['attention_mask'].flatten()
         }
+        result.update(labels)
+        
+        return result
