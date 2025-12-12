@@ -1,118 +1,112 @@
 import torch
 import torch.nn as nn
-from transformers import RobertaModel, RobertaTokenizer
+from transformers import RobertaModel, RobertaTokenizerFast
 from torch.utils.data import Dataset
 
+
+DEFAULT_TASKS = ["Q_overall", "Q2_harmful", "Q3_bias", "Q6_policy"]
+
+TASK_TO_COL = {
+    "Q_overall": "Q_overall_binary",
+    "Q2_harmful": "Q2_harmful_binary",
+    "Q3_bias": "Q3_bias_binary",
+    "Q6_policy": "Q6_policy_binary",
+}
+
+
 class MultiTaskRoBERTa(nn.Module):
-    '''
-    Input Text -> ROBERTa Encoder (shared) -> [CLS] token -> 2 or 4 separate heads -> 2 or 4 predictions
-    
-    Supports both:
-    - Binary classification with BCEWithLogitsLoss (num_labels=1)
-    - Multi-class with CrossEntropyLoss (num_labels=2+)
-    
-    Tasks:
-        - Q_overall
-        - Q2_harmful
-        - Q3_bias
-        - Q6_policy
-    '''
-    def __init__(self, num_labels=1, tasks=None):
-        super(MultiTaskRoBERTa, self).__init__()
-        
-        # Default to all 4 tasks if not specified
-        if tasks is None:
-            tasks = ['Q_overall', 'Q2_harmful', 'Q3_bias', 'Q6_policy']
-        
-        self.tasks = tasks
-        self.num_labels = num_labels
-        
-        # Shared encoder
-        self.roberta = RobertaModel.from_pretrained('roberta-base')
-        
-        # Dropout
-        self.dropout = nn.Dropout(0.1)
-        
-        # Create only the heads needed
-        self.heads = nn.ModuleDict()
-        for task in tasks:
-            self.heads[task] = nn.Linear(768, num_labels)
-    
+    """
+    Shared RoBERTa encoder + separate heads per task.
+
+    For binary tasks:
+        - Each head outputs a single logit per example: shape [B, 1]
+        - Use BCEWithLogitsLoss in training code
+    """
+    def __init__(
+        self,
+        model_name: str = "roberta-base",
+        tasks=None,
+        hidden_dropout_prob: float = 0.1,
+    ):
+        super().__init__()
+        self.tasks = tasks if tasks is not None else DEFAULT_TASKS
+
+        self.roberta = RobertaModel.from_pretrained(model_name)
+        hidden_size = self.roberta.config.hidden_size
+
+        self.dropout = nn.Dropout(hidden_dropout_prob)
+
+        self.heads = nn.ModuleDict({
+            task: nn.Linear(hidden_size, 1) for task in self.tasks
+        })
+
     def forward(self, input_ids, attention_mask):
-        # Get embeddings
         outputs = self.roberta(input_ids=input_ids, attention_mask=attention_mask)
-        
-        # Use [CLS] token representation
-        pooled_output = outputs.last_hidden_state[:, 0, :]
-        
-        # Apply dropout
-        pooled_output = self.dropout(pooled_output)
-        
-        # Get predictions for each active task
-        logits = {}
-        for task in self.tasks:
-            output = self.heads[task](pooled_output)
-            # Only squeeze if binary classification (num_labels=1)
-            if self.num_labels == 1:
-                logits[task] = output.squeeze(-1)  # [batch_size, 1] -> [batch_size]
-            else:
-                logits[task] = output  # Keep [batch_size, num_labels]
-        
+
+        # CLS token representation
+        pooled = outputs.last_hidden_state[:, 0, :]  # [B, H]
+        pooled = self.dropout(pooled)
+
+        logits = {task: self.heads[task](pooled) for task in self.tasks}  # each [B, 1]
         return logits
+
+    def freeze_encoder(self):
+        for p in self.roberta.parameters():
+            p.requires_grad = False
+
+    def unfreeze_encoder(self):
+        for p in self.roberta.parameters():
+            p.requires_grad = True
 
 
 class MultiTaskDataset(Dataset):
-    '''
-    Flexible dataset that supports 2 or 4 tasks
-    '''
-    def __init__(self, dataframe, tokenizer, max_length=512, tasks=None):
-        self.data = dataframe
+    """
+    Dataset for 2-head or 4-head multitask training.
+
+    IMPORTANT:
+    - Labels are returned as float tensors (0.0/1.0) for BCEWithLogitsLoss.
+    - Each label is shape [1] so batching yields [B, 1].
+    """
+    def __init__(self, dataframe, tokenizer, max_length=256, tasks=None):
+        self.data = dataframe.reset_index(drop=True)
         self.tokenizer = tokenizer
         self.max_length = max_length
-        
-        # Default to all 4 tasks if not specified
-        if tasks is None:
-            tasks = ['Q_overall', 'Q2_harmful', 'Q3_bias', 'Q6_policy']
-        
-        self.tasks = tasks
-        
-        # Map task names to column names
-        self.task_to_col = {
-            'Q_overall': 'Q_overall_binary',
-            'Q2_harmful': 'Q2_harmful_binary',
-            'Q3_bias': 'Q3_bias_binary',
-            'Q6_policy': 'Q6_policy_binary'
-        }
-        
+        self.tasks = tasks if tasks is not None else DEFAULT_TASKS
+
+        # Validate tasks
+        for t in self.tasks:
+            if t not in TASK_TO_COL:
+                raise ValueError(f"Unknown task '{t}'. Must be one of {list(TASK_TO_COL.keys())}")
+
     def __len__(self):
         return len(self.data)
-    
+
     def __getitem__(self, idx):
-        text = str(self.data.iloc[idx]['text'])
-        
-        # Get labels for active tasks only
-        labels = {}
-        for task in self.tasks:
-            col_name = self.task_to_col[task]
-            labels[f'labels_{task}'] = torch.tensor(
-                int(self.data.iloc[idx][col_name]), 
-                dtype=torch.long
-            )
-        
-        # Tokenize
-        encoding = self.tokenizer(
+        text = str(self.data.loc[idx, "text"])
+
+        enc = self.tokenizer(
             text,
             add_special_tokens=True,
             max_length=self.max_length,
-            padding='max_length',
+            padding="max_length",
             truncation=True,
-            return_tensors='pt'
+            return_tensors="pt",
         )
-        
-        result = {
-            'input_ids': encoding['input_ids'].flatten(),
-            'attention_mask': encoding['attention_mask'].flatten()
+
+        item = {
+            "input_ids": enc["input_ids"].squeeze(0),         # [L]
+            "attention_mask": enc["attention_mask"].squeeze(0) # [L]
         }
-        result.update(labels)
-        
-        return result
+
+        # Labels as float (for BCEWithLogitsLoss)
+        for task in self.tasks:
+            col = TASK_TO_COL[task]
+            val = self.data.loc[idx, col]
+
+            # Handle NaNs defensively (should already be removed in preprocessing)
+            if val != val:  # NaN check
+                raise ValueError(f"NaN label found at idx={idx} task={task} col={col}")
+
+            item[f"labels_{task}"] = torch.tensor([float(val)], dtype=torch.float)  # [1]
+
+        return item

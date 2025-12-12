@@ -13,34 +13,29 @@ TARGET_COLS = [
     'Q6_policy_binary'
 ]
 
-
-def balance_dataset(df, target_safe=5000, target_notsafe=5000):
+def balance_dataset(df, label_col, target_0=5000, target_1=5000, random_state=42):
     """
-    Balance dataset for BINARY classification: Safe (0) vs Not Safe (1)
-    
+    Undersample a binary dataset based on `label_col`.
+    Class 0 and class 1 are undersampled to (at most) target_0/target_1.
+
     Args:
-        df: DataFrame with Q_overall_binary column
-        target_safe: Number of Safe examples to keep
-        target_notsafe: Number of Not Safe examples to keep
-    
+        df: DataFrame
+        label_col: column name containing 0/1 labels
+        target_0: desired number of class-0 samples
+        target_1: desired number of class-1 samples
+        random_state: reproducibility
+
     Returns:
-        Balanced DataFrame
+        balanced_df
     """
-    # Separate by binary class
-    safe = df[df['Q_overall_binary'] == 0]
-    not_safe = df[df['Q_overall_binary'] == 1]
-    
-    # Undersample both classes to target counts
-    safe_balanced = safe.sample(n=min(target_safe, len(safe)), random_state=42)
-    notsafe_balanced = not_safe.sample(n=min(target_notsafe, len(not_safe)), random_state=42)
-    
-    # Combine and shuffle
-    balanced_df = pd.concat([safe_balanced, notsafe_balanced])
-    balanced_df = balanced_df.sample(frac=1, random_state=42).reset_index(drop=True)
+    c0 = df[df[label_col] == 0]
+    c1 = df[df[label_col] == 1]
 
-    
-    return balanced_df
+    c0_bal = c0.sample(n=min(target_0, len(c0)), random_state=random_state)
+    c1_bal = c1.sample(n=min(target_1, len(c1)), random_state=random_state)
 
+    out = pd.concat([c0_bal, c1_bal]).sample(frac=1, random_state=random_state).reset_index(drop=True)
+    return out
 
 def split_by_conversation(
     df: pd.DataFrame,
@@ -50,45 +45,40 @@ def split_by_conversation(
     random_state: int = 42,
     stratify_by: str = 'Q_overall_binary',
     balance: bool = True,
-    balance_params: dict = None
+    balance_params: dict = None,
+    balance_on: str = None,
 ):
-    """
-    Split data by conversation (item_id) to prevent data leakage,
-    but return ALL individual ratings for training
-    
-    Args:
-        df: DataFrame with 'item_id', 'text', and target columns
-        train_size: Proportion for training (default 0.7)
-        val_size: Proportion for validation (default 0.2)
-        test_size: Proportion for test (default 0.1)
-        random_state: Random seed for reproducibility
-        stratify_by: Target variable to use for stratification (default: Q_overall_binary)
-        balance: If True, apply undersampling to balance classes (default True)
-        balance_params: Dict with 'target_safe' and 'target_notsafe' for balancing
-        
-    Returns:
-        Dictionary with keys 'train', 'val', 'test'
-        Each contains individual ratings from non-overlapping conversations
-    """
-    
-    # Get unique conversations with their majority labels
-    conv_labels = df.groupby('item_id')[stratify_by].agg(
-        lambda x: x.mode()[0] if len(x.mode()) > 0 else x.iloc[0]
-    ).reset_index()
-    
+    assert abs(train_size + val_size + test_size - 1.0) < 1e-6, "train/val/test must sum to 1"
+
+    if balance_params is None:
+        balance_params = {"target_0": 10000, "target_1": 10000}
+
+    if ("target_safe" in balance_params) or ("target_notsafe" in balance_params):
+        balance_params = {
+            "target_0": balance_params.get("target_safe", balance_params.get("target_0", 10000)),
+            "target_1": balance_params.get("target_notsafe", balance_params.get("target_1", 10000)),
+        }
+
+    if balance_on is None and balance:
+        balance_on = stratify_by
+
+    conv_labels = (
+        df.groupby('item_id')[stratify_by]
+          .agg(lambda x: x.mode()[0] if len(x.mode()) > 0 else x.iloc[0])
+          .reset_index()
+    )
+
     unique_convs = conv_labels['item_id'].values
     labels = conv_labels[stratify_by].values
-    
-    # Split conversations into train+val / test
-    train_val_convs, test_convs, train_val_labels, test_labels = train_test_split(
-        unique_convs, 
+
+    train_val_convs, test_convs, train_val_labels, _ = train_test_split(
+        unique_convs,
         labels,
         test_size=test_size,
         random_state=random_state,
         stratify=labels
     )
-    
-    # Split train+val into train / val
+
     val_proportion = val_size / (train_size + val_size)
     train_convs, val_convs = train_test_split(
         train_val_convs,
@@ -96,45 +86,26 @@ def split_by_conversation(
         random_state=random_state,
         stratify=train_val_labels
     )
-    
-    # Get all individual ratings for each conversation set
+
     splits = {
-        'train': df[df['item_id'].isin(train_convs)].copy(),
-        'val': df[df['item_id'].isin(val_convs)].copy(),
-        'test': df[df['item_id'].isin(test_convs)].copy()
+        "train": df[df["item_id"].isin(train_convs)].copy(),
+        "val":   df[df["item_id"].isin(val_convs)].copy(),
+        "test":  df[df["item_id"].isin(test_convs)].copy(),
     }
-    
-    # Apply balancing if requested
+
     if balance:
-        if balance_params is None:
-            balance_params = {'target_safe': 10000, 'target_notsafe': 10000}
-        
-        # Train
-        splits['train'] = balance_dataset(
-            splits['train'], 
-            target_safe=balance_params['target_safe'],
-            target_notsafe=balance_params['target_notsafe']
-        )
-        
-        # Validation
-        val_safe = int(balance_params['target_safe'] * 0.2)
-        val_notsafe = int(balance_params['target_notsafe'] * 0.2)
-        splits['val'] = balance_dataset(
-            splits['val'],
-            target_safe=val_safe,
-            target_notsafe=val_notsafe
-        )
-        
-        # Test
-        test_safe = int(balance_params['target_safe'] * 0.2)
-        test_notsafe = int(balance_params['target_notsafe'] * 0.2)
-        splits['test'] = balance_dataset(
-            splits['test'],
-            target_safe=test_safe,
-            target_notsafe=test_notsafe
-        )
-    
+        t0 = balance_params.get("target_0", 10000)
+        t1 = balance_params.get("target_1", 10000)
+
+        val_t0, val_t1 = int(t0 * 0.2), int(t1 * 0.2)
+        test_t0, test_t1 = int(t0 * 0.2), int(t1 * 0.2)
+
+        splits["train"] = balance_dataset(splits["train"], balance_on, t0, t1, random_state)
+        splits["val"]   = balance_dataset(splits["val"],   balance_on, val_t0, val_t1, random_state)
+        splits["test"]  = balance_dataset(splits["test"],  balance_on, test_t0, test_t1, random_state)
+
     return splits
+
 
 
 def load_data_sklearn(
@@ -255,7 +226,7 @@ def load_multi_task_data(
     val_size: float = 0.2,
     test_size: float = 0.1,
     random_state: int = 42,
-    balance: bool = True,
+    balance: bool = False,
     balance_params: dict = None
 ):
     """
@@ -274,7 +245,8 @@ def load_multi_task_data(
         random_state=random_state,
         stratify_by='Q_overall_binary',  # Use overall safety for stratification
         balance=balance,
-        balance_params=balance_params
+        balance_params=balance_params,
+        balance_on=None
     )
     
     # Keep text + all 4 binary targets
