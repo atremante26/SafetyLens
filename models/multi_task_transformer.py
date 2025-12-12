@@ -6,13 +6,18 @@ from torch.utils.data import Dataset
 class MultiTaskRoBERTa(nn.Module):
     '''
     Input Text -> ROBERTa Encoder (shared) -> [CLS] token -> 2 or 4 separate heads -> 2 or 4 predictions
+    
+    Supports both:
+    - Binary classification with BCEWithLogitsLoss (num_labels=1)
+    - Multi-class with CrossEntropyLoss (num_labels=2+)
+    
     Tasks:
         - Q_overall
-        - Q2_harmful_content_overall
-        - Q3_bias_overall
-        - Q6_policy_guidelines_overall
+        - Q2_harmful
+        - Q3_bias
+        - Q6_policy
     '''
-    def __init__(self, num_labels=2, tasks=None):
+    def __init__(self, num_labels=1, tasks=None):
         super(MultiTaskRoBERTa, self).__init__()
         
         # Default to all 4 tasks if not specified
@@ -20,6 +25,7 @@ class MultiTaskRoBERTa(nn.Module):
             tasks = ['Q_overall', 'Q2_harmful', 'Q3_bias', 'Q6_policy']
         
         self.tasks = tasks
+        self.num_labels = num_labels
         
         # Shared encoder
         self.roberta = RobertaModel.from_pretrained('roberta-base')
@@ -45,7 +51,12 @@ class MultiTaskRoBERTa(nn.Module):
         # Get predictions for each active task
         logits = {}
         for task in self.tasks:
-            logits[task] = self.heads[task](pooled_output)
+            output = self.heads[task](pooled_output)
+            # Only squeeze if binary classification (num_labels=1)
+            if self.num_labels == 1:
+                logits[task] = output.squeeze(-1)  # [batch_size, 1] -> [batch_size]
+            else:
+                logits[task] = output  # Keep [batch_size, num_labels]
         
         return logits
 
