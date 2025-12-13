@@ -3,12 +3,11 @@ from torch.utils.data import Dataset
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 MODEL_NAME = "roberta-base"
-NUM_LABELS = 3
+NUM_LABELS = 2
 
 label2id = {
     "safe": 0,
     "unsafe": 1,
-    "ambiguous": 2,
 }
 id2label = {v: k for k, v in label2id.items()}
 
