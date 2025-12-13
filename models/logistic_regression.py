@@ -26,6 +26,3 @@ def fit_logistic_regression():
 if __name__ == "__main__":
     fit_logistic_regression()
 
-
-    
-
