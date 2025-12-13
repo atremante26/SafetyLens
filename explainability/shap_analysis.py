@@ -7,7 +7,7 @@ from scipy.sparse import csr_matrix
 from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
 
 # Configuration
-LOGREG_PATH = Path("results/models/logistic_regression.pkl")
+LOGREG_PATH = Path("results/models/logistic_regression_model.pkl")
 VECTORIZER_PATH = Path("results/models/tfidf_vectorizer.pkl")
 OUTPUT_DIR = Path("results/explainability/shap")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -70,18 +70,12 @@ def explain_logreg (
     X = vectorizer.transform(texts)
 
     # SHAP explainer
-    explainer = shap.LinearExplainer(
-        model,
-        X,
-        feature_names=feature_names
-    )
-
+    explainer = shap.LinearExplainer(model, X, feature_names=feature_names)
     shap_values = explainer(X)
 
-    # Visualization (text-based)
     for i, text in enumerate(texts):
         print(f"\nText {i}: {text}")
-        shap.plots.text(shap_values[i])
+        shap.plots.bar(shap_values[i], max_display=15)
 
 
 # SINGLE-TASK TRANSFORMER MODEL
@@ -131,3 +125,6 @@ def shap_multi_task_transformer():
     shap_values = explainer(texts)
 
     shap.plots.text(shap_values[0])
+
+if __name__ == "__main__":
+    explain_logreg(LOGREG_PATH, VECTORIZER_PATH)
