@@ -11,6 +11,7 @@ label2id = {
 }
 id2label = {v: k for k, v in label2id.items()}
 
+
 class HateSpeechDataset(Dataset):
     """
     Dataset for single-task classification with RoBERTa.
