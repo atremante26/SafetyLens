@@ -206,39 +206,37 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Data files
+# Ignore raw data except metadata
 data/raw/*
 !data/raw/.gitkeep
 !data/raw/README.md
-!data/processed/.gitkeep
 
-# Model checkpoints and weights
-models/*.pt
-models/*.pth
-models/*.bin
-models/*.safetensors
+# Track processed data explicitly
+!data/processed/
+!data/processed/.gitkeep
+!data/processed/*.csv
+
+# Ignore all model files by default
+*.pt
+*.pth
+*.bin
+*.safetensors
 *.ckpt
 
-# Results
-results/models/*
+# Allow final, curated checkpoints
+!results/models/best_multitask_2.pt
+!results/models/best_multitask_4.pt
 
-# Jupyter notebooks
-*.ipynb_checkpoints/
+# Ignore figures generated locally
+results/figures/*
+!results/figures/individual_ratings_distribution.png
 
-# Secrets and credentials
-secrets.json
-credentials.json
-*.key
+# Allow prediction CSVs
+!results/multi_task_transformer/test_predictions_*.csv
 
-# Large data files
-*.zip
-*.tar.gz
-*.gz
-*.model
-
-# macOS
+# Ignore other large result dumps
+results/models/*.pt
 .DS_Store
 
-# Temporary files
-*.tmp
-*.temp
+# Integrated Gradients results
+!results/ig/*.csv
