@@ -1,0 +1,273 @@
+import os
+import argparse
+import random
+from typing import Dict, List, Tuple
+
+import numpy as np
+import pandas as pd
+from tqdm.auto import tqdm
+
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+from torch.optim import AdamW
+
+from transformers import AutoTokenizer, get_linear_schedule_with_warmup
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score, average_precision_score
+)
+
+from models import MultiTaskRoBERTa, MultiTaskDataset
+from data_preprocessing import load_multi_task_data
+
+SEED = 42
+MODEL_NAME = "roberta-base"
+MAX_LEN = 256
+BATCH_SIZE = 16
+EPOCHS = 3          # set 5 manually when running 4-head i
+LR = 2e-5
+WARMUP_FRAC = 0.1
+NUM_WORKERS = 0     
+BALANCE = False     # multi-task: keep False, use pos_weight instead
+
+TASKS_2 = ["Q_overall", "Q2_harmful"]
+TASKS_4 = ["Q_overall", "Q2_harmful", "Q3_bias", "Q6_policy"]
+
+TASK_TO_COL = {
+    "Q_overall": "Q_overall_binary",
+    "Q2_harmful": "Q2_harmful_binary",
+    "Q3_bias": "Q3_bias_binary",
+    "Q6_policy": "Q6_policy_binary",
+}
+
+# UTILS
+def set_seed(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+def ensure_dir(path: str):
+    if path:
+        os.makedirs(path, exist_ok=True)
+
+def compute_binary_metrics(y_true, y_prob, threshold=0.5) -> Dict[str, float]:
+    y_true = np.asarray(y_true).astype(int)
+    y_prob = np.asarray(y_prob).astype(float)
+    y_pred = (y_prob >= threshold).astype(int)
+
+    return {
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+        "precision_pos": float(precision_score(y_true, y_pred, pos_label=1, zero_division=0)),
+        "recall_pos": float(recall_score(y_true, y_pred, pos_label=1, zero_division=0)),
+        "f1_pos": float(f1_score(y_true, y_pred, pos_label=1, zero_division=0)),
+        "f1_macro": float(f1_score(y_true, y_pred, average="macro", zero_division=0)),
+        "pr_auc": float(average_precision_score(y_true, y_prob)) if len(np.unique(y_true)) > 1 else 0.0,
+        "pred_pos_rate": float(y_pred.mean()),
+        "true_pos_rate": float(y_true.mean()),
+    }
+
+def compute_pos_weights(train_df: pd.DataFrame, tasks: List[str]) -> Dict[str, float]:
+    out = {}
+    for t in tasks:
+        col = TASK_TO_COL[t]
+        y = train_df[col].astype(int).values
+        pos = int((y == 1).sum())
+        neg = int((y == 0).sum())
+        out[t] = float(neg / max(pos, 1))
+    return out
+
+
+# TRAIN / EVAL / PRED
+def train_one_epoch(model, loader, tasks, device, loss_fns, optimizer, scheduler, epoch_idx) -> float:
+    model.train()
+    running = 0.0
+
+    for batch in tqdm(loader, desc=f"Train epoch {epoch_idx+1}", leave=False):
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+
+        outputs = model(input_ids, attention_mask)
+
+        loss = 0.0
+        for t in tasks:
+            y = batch[f"labels_{t}"].to(device).float()
+            logits = outputs[t]  # [B]
+            loss = loss + loss_fns[t](logits, y)
+
+        loss = loss / len(tasks)
+
+        optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+        scheduler.step()
+
+        running += float(loss.item())
+
+    return running / max(len(loader), 1)
+
+@torch.no_grad()
+def evaluate(model, loader, tasks, device, loss_fns) -> Tuple[float, Dict[str, Dict[str, float]]]:
+    model.eval()
+    running = 0.0
+
+    all_true = {t: [] for t in tasks}
+    all_prob = {t: [] for t in tasks}
+
+    for batch in tqdm(loader, desc="Eval", leave=False):
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+
+        outputs = model(input_ids, attention_mask)
+
+        loss = 0.0
+        for t in tasks:
+            y = batch[f"labels_{t}"].to(device).float()
+            logits = outputs[t]
+            loss = loss + loss_fns[t](logits, y)
+
+            prob = torch.sigmoid(logits).detach().cpu().numpy()
+            all_prob[t].extend(prob.tolist())
+            all_true[t].extend(y.detach().cpu().numpy().tolist())
+
+        loss = loss / len(tasks)
+        running += float(loss.item())
+
+    metrics = {t: compute_binary_metrics(all_true[t], all_prob[t]) for t in tasks}
+    return running / max(len(loader), 1), metrics
+
+@torch.no_grad()
+def predict_df(model, loader, df_source, tasks, device) -> pd.DataFrame:
+    model.eval()
+    rows = []
+    df_source = df_source.reset_index(drop=True)
+    idx = 0
+
+    for batch in tqdm(loader, desc="Predict", leave=False):
+        bs = batch["input_ids"].shape[0]
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+
+        outputs = model(input_ids, attention_mask)
+
+        for i in range(bs):
+            row = {"text": df_source.loc[idx, "text"]}
+            for t in tasks:
+                col = TASK_TO_COL[t]
+                row[f"{t}_true"] = int(df_source.loc[idx, col])
+                row[f"{t}_prob"] = float(torch.sigmoid(outputs[t][i]).item())
+            rows.append(row)
+            idx += 1
+
+    return pd.DataFrame(rows)
+
+
+# MAIN
+def parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--tasks", choices=["2", "4"], required=True, help="Use 2-head or 4-head model.")
+    p.add_argument("--ckpt_out", required=True, help="Output checkpoint .pt path")
+    p.add_argument("--preds_out", required=True, help="Output test predictions .csv path")
+    return p.parse_args()
+
+def main():
+    args = parse_args()
+    set_seed(SEED)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Device:", device)
+
+    tasks = TASKS_2 if args.tasks == "2" else TASKS_4
+    print("Tasks:", tasks)
+
+    # Data
+    splits = load_multi_task_data(balance=BALANCE)
+    train_df = splits["train"].reset_index(drop=True)
+    val_df   = splits["val"].reset_index(drop=True)
+    test_df  = splits["test"].reset_index(drop=True)
+
+    print(f"Split sizes: train={len(train_df):,} val={len(val_df):,} test={len(test_df):,}")
+
+    # Tokenizer / datasets
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    train_ds = MultiTaskDataset(train_df, tokenizer, max_length=MAX_LEN, tasks=tasks)
+    val_ds   = MultiTaskDataset(val_df,   tokenizer, max_length=MAX_LEN, tasks=tasks)
+    test_ds  = MultiTaskDataset(test_df,  tokenizer, max_length=MAX_LEN, tasks=tasks)
+
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,  num_workers=NUM_WORKERS)
+    val_loader   = DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
+    test_loader  = DataLoader(test_ds,  batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
+
+    # Loss per task with pos_weight
+    pos_w = compute_pos_weights(train_df, tasks)
+    print("pos_weight:", {k: round(v, 3) for k, v in pos_w.items()})
+
+    loss_fns = {t: nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_w[t], device=device)) for t in tasks}
+
+    # Model
+    model = MultiTaskRoBERTa(model_name=MODEL_NAME, tasks=tasks).to(device)
+
+    optimizer = AdamW(model.parameters(), lr=LR)
+    total_steps = len(train_loader) * EPOCHS
+    warmup_steps = int(WARMUP_FRAC * total_steps)
+    scheduler = get_linear_schedule_with_warmup(optimizer, warmup_steps, total_steps)
+
+    # Select metric
+    select_task = "Q2_harmful" if "Q2_harmful" in tasks else "Q_overall"
+    best_score = -1.0
+
+    ensure_dir(os.path.dirname(args.ckpt_out))
+    ensure_dir(os.path.dirname(args.preds_out))
+
+    # Train
+    for epoch in range(EPOCHS):
+        tr_loss = train_one_epoch(model, train_loader, tasks, device, loss_fns, optimizer, scheduler, epoch)
+        va_loss, va_metrics = evaluate(model, val_loader, tasks, device, loss_fns)
+
+        score = va_metrics[select_task]["pr_auc"] if select_task == "Q2_harmful" else va_metrics[select_task]["f1_pos"]
+
+        print(f"\nEpoch {epoch+1}/{EPOCHS}")
+        print(f"  train_loss={tr_loss:.4f}  val_loss={va_loss:.4f}  {select_task}_score={score:.4f}")
+        for t in tasks:
+            m = va_metrics[t]
+            print(f"  {t}: f1_pos={m['f1_pos']:.3f} pr_auc={m['pr_auc']:.3f} pred_pos_rate={m['pred_pos_rate']:.3f}")
+
+        if score > best_score:
+            best_score = score
+            torch.save(
+                {"model_state_dict": model.state_dict(), "tasks": tasks, "model_name": MODEL_NAME, "max_len": MAX_LEN},
+                args.ckpt_out
+            )
+            print(f"  Saved best checkpoint to {args.ckpt_out}")
+
+    # Test + predictions
+    ckpt = torch.load(args.ckpt_out, map_location=device)
+    model.load_state_dict(ckpt["model_state_dict"])
+    model.eval()
+
+    te_loss, te_metrics = evaluate(model, test_loader, tasks, device, loss_fns)
+    print(f"\nTest loss: {te_loss:.4f}")
+    for t in tasks:
+        m = te_metrics[t]
+        print(f"{t}: acc={m['accuracy']:.3f} f1_pos={m['f1_pos']:.3f} pr_auc={m['pr_auc']:.3f}")
+
+    preds = predict_df(model, test_loader, test_df, tasks, device)
+    preds.to_csv(args.preds_out, index=False)
+    print("Saved predictions:", args.preds_out)
+
+if __name__ == "__main__":
+    main()
+
+'''
+2 Task Example:
+python scripts/multitask_training.py \
+  --tasks 2 \
+  --ckpt_out results/models/best_multitask_2.pt \
+  --preds_out results/multi_task_transformer/test_predictions_2.csv
+
+4 Task Example:
+python scripts/multitask_training.py \
+  --tasks 4 \
+  --ckpt_out results/models/best_multitask_4.pt \
+  --preds_out results/multi_task_transformer/test_predictions_4.csv
+'''

@@ -1,95 +1,122 @@
 # Research Hypotheses
 
-## Performance Hypotheses (3)
-
-These hypotheses concern model performance on 3-class safety detection (Safe=0, Ambiguous=1, Unsafe=2).
-
-### H1: Transformer Superiority
-**Hypothesis:** Both single-task and multi-task transformers will significantly outperform the logistic regression baseline across all four target variables.
-
-**Rationale:** 
-- Transformers can capture contextual nuances and long-range dependencies
-- Pre-trained language models already understand semantic safety concepts
-- TF-IDF features are limited to word frequencies without context
-
-**Expected Results:**
-- Baseline LogReg F1 (macro): 0.65-0.70
-- Single-Task Transformer F1 (macro): 0.75-0.80
-- Multi-Task Transformer F1 (macro): 0.75-0.82
-
-**Measurement:** Compare macro-averaged F1 scores across all models and targets.
+This project evaluates transformer-based models for **binary safety detection** (Safe = 0, Not Safe = 1) across multiple safety dimensions derived from the DICES dataset. We study both **model performance** and **model explainability** using Integrated Gradients.
 
 ---
 
-### H2: Multi-Task Learning Benefits
-**Hypothesis:** The multi-task transformer will perform comparably to (or slightly better than) single-task transformers, especially on the overall safety prediction task (Q_overall).
+## Performance Hypotheses
+
+### H1: Transformer Superiority over Linear Baselines
+
+**Hypothesis:**  
+Transformer-based models will significantly outperform a logistic regression baseline across all evaluated safety dimensions.
 
 **Rationale:**
-- Shared representations can capture correlations between safety dimensions
-- Harmful content, bias, and policy violations often co-occur
-- Multi-task learning acts as implicit regularization
+- Logistic regression relies on shallow lexical features and lacks contextual understanding.
+- Transformer models capture semantic nuance, negation, and long-range dependencies.
+- Pre-trained language models encode prior knowledge relevant to safety and harmful content.
 
 **Expected Results:**
-- Multi-task F1 on Q_overall: ≥ Single-task F1
-- Multi-task may show 1-3% improvement on minority classes
-- Training efficiency: 4x faster than training 4 separate models
+- Logistic Regression: lower PR-AUC and F1 (positive class).
+- Single-task Transformer: substantial improvement over the linear baseline.
+- Multi-task Transformer: comparable or improved performance relative to single-task models.
 
-**Measurement:** Compare per-target F1 scores and training time.
+**Measurement:**
+- Compare **PR-AUC** and **F1 (positive class)** across all models and safety tasks.
 
 ---
 
-### H3: Ambiguous Class Difficulty
-**Hypothesis:** All models will struggle most with the Ambiguous class (label=1), showing lower precision and recall compared to Safe and Unsafe classes.
+### H2: Benefits of Multi-Task Learning
+
+**Hypothesis:**  
+A multi-task transformer with shared representations will perform comparably to or better than single-task transformers, particularly for the overall safety task (`Q_overall`).
 
 **Rationale:**
-- Ambiguous class is inherently subjective (raters unsure)
-- Only ~6% of dataset (class imbalance)
-- Ambiguous cases likely fall on decision boundaries
+- Safety dimensions such as harmful content, bias, and policy violations are correlated.
+- Multi-task learning enables shared representations that capture common safety signals.
+- Joint training acts as an implicit form of regularization.
 
 **Expected Results:**
-- Safe class F1: 0.75-0.85
-- Unsafe class F1: 0.70-0.80
-- Ambiguous class F1: 0.40-0.60 (significantly lower)
+- Multi-task performance on `Q_overall` ≥ single-task performance.
+- Improved stability on imbalanced tasks.
+- Reduced training cost compared to training multiple independent models.
 
-**Measurement:** Per-class F1 scores from confusion matrices.
+**Measurement:**
+- Compare per-task **PR-AUC** and **F1 (positive class)** between single-task and multi-task models.
+- Report training efficiency (single multi-task model vs multiple single-task models).
 
 ---
 
-## Explainability Hypotheses (2)
+### H3: Task Difficulty and Class Imbalance Effects
 
-These hypotheses concern token attribution patterns from explainability methods.
-
-### H4: Toxic Keyword Detection
-**Hypothesis:** For clearly unsafe content (label=2), explainability methods will consistently highlight explicit toxic keywords and slurs.
+**Hypothesis:**  
+Safety dimensions with stronger class imbalance will exhibit lower predictive performance.
 
 **Rationale:**
-- Models rely on surface-level features for obvious cases
-- Toxic terms have strong negative associations in training data
-- Method should show clear attribution to problematic tokens
+- Minority positive classes provide fewer learning signals.
+- Certain violations (e.g., policy or bias) are more subtle and context-dependent.
+- Imbalanced labels challenge threshold-based classifiers.
 
 **Expected Results:**
-- Profanity, slurs, violent language receive high attribution scores
-- Top-5 tokens capture >60% of total attribution
-- Clear, interpretable explanations for unsafe predictions
+- Higher PR-AUC and F1 for `Q_overall` and `Q2_harmful`.
+- Lower PR-AUC and F1 for `Q3_bias` and `Q6_policy`.
+- Greater variance in predictions for rarer tasks.
 
-**Measurement:** Token importance rankings and qualitative analysis.
+**Measurement:**
+- Compare per-task PR-AUC, F1, and predicted positive rates on the test set.
 
 ---
 
-### H5: Contextual Reasoning for Ambiguous Cases
-**Hypothesis:** For ambiguous content (label=1), explainability methods will show **diffuse attribution** across multiple context words rather than concentrated on single keywords.
+## Explainability Hypotheses (Integrated Gradients)
+
+These hypotheses analyze **token-level attribution patterns** produced by Integrated Gradients.
+
+---
+
+### H4: Salient Token Attribution for Unsafe Content
+
+**Hypothesis:**  
+For confidently predicted unsafe examples, Integrated Gradients will assign high attribution scores to explicit harmful or toxic tokens.
 
 **Rationale:**
-- Ambiguous cases require nuanced interpretation
-- Model uncertainty leads to distributed attention
-- No single "smoking gun" token determines classification
+- Obvious unsafe content often contains strong lexical triggers.
+- Transformer models rely heavily on these tokens for prediction.
+- Attribution methods should reflect this reliance.
 
 **Expected Results:**
-- Lower peak attribution scores compared to unsafe cases
-- Top-5 tokens capture <40% of total attribution
-- Emphasis on broader context rather than individual triggers
-- Higher variance in attribution patterns
+- High-magnitude attributions for profanity, slurs, or explicit harmful language.
+- A small number of tokens capture a large proportion of total attribution.
+- Clear, human-interpretable explanations for unsafe predictions.
 
-**Measurement:** Token attribution score distributions and entropy analysis.
+**Measurement:**
+- Qualitative inspection of top-attributed tokens.
+- Proportion of total attribution mass captured by top-k tokens.
 
 ---
+
+### H5: Distributed Attribution for Subtle or Borderline Cases
+
+**Hypothesis:**  
+For lower-confidence or borderline unsafe predictions, attribution will be more diffuse across contextual tokens rather than concentrated on single keywords.
+
+**Rationale:**
+- Subtle safety violations depend on broader context.
+- Model uncertainty leads to distributed reliance on multiple cues.
+- Integrated Gradients should reflect this diffuse reasoning.
+
+**Expected Results:**
+- Lower peak attribution scores compared to highly unsafe cases.
+- Attribution spread across phrases and contextual words.
+- Greater diversity among top-attributed tokens.
+
+**Measurement:**
+- Compare attribution distributions between high-confidence and low-confidence predictions.
+- Analyze attribution dispersion or entropy across tokens.
+
+---
+
+## Summary
+
+Together, these hypotheses evaluate:
+- The **predictive effectiveness** of single-task and multi-task transformer models for safety detection.
+- The extent to which **Integrated Gradients** provides meaningful, human-interpretable explanations of model behavior.
