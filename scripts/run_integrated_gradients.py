@@ -5,10 +5,8 @@ import pandas as pd
 from tqdm import tqdm
 
 import torch
-from transformers import AutoTokenizer
-
-from models import MultiTaskRoBERTa  # add other models
-
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from models import MultiTaskRoBERTa
 from explainability import compute_integrated_gradients, top_k_tokens
 
 # CONFIG
@@ -58,9 +56,11 @@ def load_model(ckpt_path, model_type, device):
             tasks=ckpt["tasks"]
         ).to(device)
     else:
-        model = AutoModelForSequenceClassification( # TODO: FIX WITH ACTUAL MODEL
+        model = AutoModelForSequenceClassification.from_pretrained(
             model_name,
-            num_labels=1
+            num_labels=2,
+            id2label={0: "safe", 1: "unsafe"},
+            label2id={"safe": 0, "unsafe": 1}
         ).to(device)
 
     # Load trained weights
