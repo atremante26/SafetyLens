@@ -219,6 +219,9 @@ models/*.bin
 models/*.safetensors
 *.ckpt
 
+# Results
+results/models/*
+
 # Jupyter notebooks
 *.ipynb_checkpoints/
 
