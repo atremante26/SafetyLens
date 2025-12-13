@@ -1,116 +1,107 @@
 import torch
 import numpy as np
-from captum.attr import IntegratedGradients
+from captum.attr import LayerIntegratedGradients
 
 
-def input(text, tokenizer, device):
-    # Tokenize text and prepare for model input 
-    encoding = tokenizer(
+def prepare_inputs(text, tokenizer, device, max_length=128):
+    enc = tokenizer(
         text,
-        max_length=512,
-        padding='max_length', # Pad to 512 tokens
-        truncation=True, # Cut off if longer than 512
-        return_tensors='pt' # Return PyTorch tensors
+        max_length=max_length,
+        padding="max_length",
+        truncation=True,
+        return_tensors="pt",
     )
+    input_ids = enc["input_ids"].to(device)
+    attention_mask = enc["attention_mask"].to(device)
+    tokens = tokenizer.convert_ids_to_tokens(enc["input_ids"][0])
+    return input_ids, attention_mask, tokens
+
+
+@torch.no_grad()
+def predict_binary(model, input_ids, attention_mask, task="Q2_harmful", threshold=0.5):
+    model.eval()
+    logits = model(input_ids=input_ids, attention_mask=attention_mask)[task]  # [B,1]
+    prob = torch.sigmoid(logits).squeeze(-1)  # [B]
+    pred = (prob >= threshold).long()
     return {
-        'input_ids': encoding['input_ids'].to(device),
-        'attention_mask': encoding['attention_mask'].to(device),
-        'tokens': tokenizer.convert_ids_to_tokens(encoding['input_ids'][0])
+        "logit": float(logits.squeeze().item()),
+        "prob": float(prob.item()),
+        "pred": int(pred.item())
     }
-
-
-def predict(model, input_ids, attention_mask, task='Q_overall'):
-    # Get model prediction for a specific task
-
-    model.eval() # Evaluation mode
-
-    with torch.no_grad():
-        outputs = model(input_ids, attention_mask)
-        logits = outputs[task]
-        probs = torch.softmax(logits, dim=1) # Convert to probabilities
-        pred_class = torch.argmax(probs, dim=1) # Get highest probability class
-    
-    return {
-        'predicted_class': pred_class.item(), # Tensor -> Int
-        'probabilities': probs[0].cpu().numpy(), # Probs -> NumPy array
-        'class_names': ['Safe', 'Ambiguous', 'Unsafe']
-    }
-
-
-def baseline(input_ids, attention_mask, baseline_token_id=1):
-    # Construct baseline (all padding tokens) for Integrated Gradients
-    ref_input_ids = torch.ones_like(input_ids) * baseline_token_id
-    ref_attention_mask = torch.zeros_like(attention_mask)
-    return (input_ids, attention_mask), (ref_input_ids, ref_attention_mask)
 
 
 def metrics(attributions):
-    # Compute statistics for attribution analysis (mean, std, max, sparsity)
-    non_zero_attrs = attributions[attributions != 0]
-    
-    if len(non_zero_attrs) == 0:
-        return {'mean': 0, 'std': 0, 'max': 0, 'sparsity': 1.0}
-    
+    attributions = np.asarray(attributions)
+    non_zero = attributions[np.abs(attributions) > 1e-12]
+    if len(non_zero) == 0:
+        return {"mean": 0.0, "std": 0.0, "max": 0.0, "sparsity": 1.0}
     return {
-        'mean': float(np.mean(np.abs(non_zero_attrs))),
-        'std': float(np.std(non_zero_attrs)),
-        'max': float(np.max(np.abs(non_zero_attrs))),
-        'sparsity': float(1.0 - (len(non_zero_attrs) / len(attributions)))
+        "mean": float(np.mean(np.abs(non_zero))),
+        "std": float(np.std(np.abs(non_zero))),
+        "max": float(np.max(np.abs(non_zero))),
+        "sparsity": float(1.0 - (len(non_zero) / len(attributions)))
     }
 
 
-def compute_ig_attributions(text, model, tokenizer, task='Q_overall', n_steps=50, device='cuda'):
+def compute_ig_attributions(
+    text,
+    model,
+    tokenizer,
+    task="Q2_harmful",
+    n_steps=25,
+    device="cuda",
+    max_length=128,
+):
     """
-    Compute Integrated Gradients attributions for a text input.
-    
-    Returns dictionary with tokens, attributions, predictions, and metrics.
+    Integrated Gradients on RoBERTa embeddings using LayerIntegratedGradients.
+
+    Returns:
+        dict with tokens, attributions per token, prob/pred, convergence delta.
     """
-    # Prepare input
-    inputs = input(text, tokenizer, device)
-    input_ids = inputs['input_ids']
-    attention_mask = inputs['attention_mask']
-    tokens = inputs['tokens']
-    
-    # Get prediction
-    prediction = predict(model, input_ids, attention_mask, task)
-    predicted_class = prediction['predicted_class']
-    
-    # Construct baseline
-    (input_ids, attention_mask), (ref_input_ids, ref_attention_mask) = \
-        baseline(input_ids, attention_mask)
-    
-    # Define forward function for this task
-    def forward(ids, mask):
-        outputs = model(ids, mask)
-        return outputs[task]
-    
-    # Initialize Integrated Gradients
-    ig = IntegratedGradients(forward)
-    
-    # Compute attributions
-    attributions, delta = ig.attribute(
-        inputs=(input_ids, attention_mask),
-        baselines=(ref_input_ids, ref_attention_mask),
-        target=predicted_class,
+    model.eval()
+    input_ids, attention_mask, tokens = prepare_inputs(text, tokenizer, device, max_length=max_length)
+
+    # Baseline: all PAD tokens, same attention mask
+    pad_id = tokenizer.pad_token_id
+    baseline_ids = torch.full_like(input_ids, pad_id)
+
+    # Forward function returns scalar logit per example (Captum expects shape [B,1] or [B])
+    def forward_func(ids, mask):
+        return model(input_ids=ids, attention_mask=mask)[task]  # [B,1]
+
+    lig = LayerIntegratedGradients(forward_func, model.roberta.embeddings)
+
+    attributions, delta = lig.attribute(
+        inputs=input_ids,
+        baselines=baseline_ids,
+        additional_forward_args=(attention_mask,),
         n_steps=n_steps,
         return_convergence_delta=True
     )
-    
-    # Extract token attributions (sum over embedding dimensions)
-    token_attributions = attributions[0].sum(dim=2).squeeze(0)
-    token_attributions = token_attributions.cpu().detach().numpy()
-    
-    # Normalize attributions
-    token_attributions = token_attributions / np.linalg.norm(token_attributions)
-    
+
+    # Sum over embedding dim -> [B,L]
+    token_attrs = attributions.sum(dim=-1).squeeze(0).detach().cpu().numpy()
+
+    # Mask out padding for readability
+    mask = attention_mask.squeeze(0).detach().cpu().numpy().astype(bool)
+    tokens = [t for t, m in zip(tokens, mask) if m]
+    token_attrs = np.array([a for a, m in zip(token_attrs, mask) if m], dtype=float)
+
+    # Safe normalization (optional)
+    denom = np.max(np.abs(token_attrs)) + 1e-9
+    token_attrs_norm = token_attrs / denom
+
+    pred_info = predict_binary(model, input_ids, attention_mask, task=task)
+
     return {
-        'text': text,
-        'task': task,
-        'tokens': tokens,
-        'attributions': token_attributions,
-        'predicted_class': predicted_class,
-        'class_name': prediction['class_names'][predicted_class],
-        'probabilities': prediction['probabilities'],
-        'convergence_delta': delta.item(),
-        'metrics': metrics(token_attributions)
+        "text": text,
+        "task": task,
+        "tokens": tokens,
+        "attributions": token_attrs_norm,
+        "raw_attributions": token_attrs,
+        "prob": pred_info["prob"],
+        "pred": pred_info["pred"],
+        "logit": pred_info["logit"],
+        "convergence_delta": float(delta.item()),
+        "metrics": metrics(token_attrs_norm)
     }
