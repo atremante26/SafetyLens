@@ -1,8 +1,8 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from gensim.models import Word2Vec
-from gensim.utils import simple_preprocess
+from sklearn.feature_extraction.text import TfidfVectorizer
+import pickle
 
 DATA_PATH = 'data/processed/dices_350_binary.csv'
 
@@ -114,21 +114,17 @@ def load_data_sklearn(
     val_size: float = 0.2,
     test_size: float = 0.1,
     random_state: int = 42,
-    vector_size: int = 100,
-    window: int = 5,
-    min_count: int = 2,
-    workers: int = 4,
     balance: bool = True,
-    balance_params: dict = None
+    balance_params: dict = None,
+    max_features: int = 20000,
+    ngram_range: tuple = (1, 2)
 ):
     """
-    Load data for sklearn models (Logistic Regression) with binary classification
-    Trains on individual ratings from non-overlapping conversations
+    Load data for sklearn models (Logistic Regression) using TF-IDF
+    Suitable for SHAP explainability
     """
-    # Load individual ratings
     df = pd.read_csv(DATA_PATH)
-    
-    # Split by conversation (returns individual ratings)
+
     splits = split_by_conversation(
         df,
         train_size=train_size,
@@ -139,50 +135,35 @@ def load_data_sklearn(
         balance=balance,
         balance_params=balance_params
     )
-    
-    # Extract text and labels
+
     X_train_text = splits['train']['text'].values
-    X_val_text = splits['val']['text'].values
-    X_test_text = splits['test']['text'].values
-    
+    X_val_text   = splits['val']['text'].values
+    X_test_text  = splits['test']['text'].values
+
     y_train = splits['train'][target].values
-    y_val = splits['val'][target].values
-    y_test = splits['test'][target].values
+    y_val   = splits['val'][target].values
+    y_test  = splits['test'][target].values
 
-    # Tokenize
-    train_tokens = [simple_preprocess(text) for text in X_train_text]
-    val_tokens = [simple_preprocess(text) for text in X_val_text]
-    test_tokens = [simple_preprocess(text) for text in X_test_text]
-
-    # Train Word2Vec on training data
-    w2v_model = Word2Vec(
-        sentences=train_tokens,
-        vector_size=vector_size,
-        window=window,
-        min_count=min_count,
-        workers=workers,
-        seed=random_state,
-        epochs=10
+    # TF-IDF vectorization
+    vectorizer = TfidfVectorizer(
+        max_features=max_features,
+        ngram_range=ngram_range,
+        lowercase=True,
+        stop_words='english'
     )
 
-    def text_to_vector(tokens, model):
-        """Average word vectors for all words in the text"""
-        vectors = []
-        for word in tokens:
-            if word in model.wv:
-                vectors.append(model.wv[word])
-        
-        if len(vectors) > 0:
-            return np.mean(vectors, axis=0)
-        else:
-            return np.zeros(model.vector_size)
+    X_train = vectorizer.fit_transform(X_train_text)
+    X_val   = vectorizer.transform(X_val_text)
+    X_test  = vectorizer.transform(X_test_text)
 
-    # Convert all texts to vectors
-    X_train = np.array([text_to_vector(tokens, w2v_model) for tokens in train_tokens])
-    X_val = np.array([text_to_vector(tokens, w2v_model) for tokens in val_tokens])
-    X_test = np.array([text_to_vector(tokens, w2v_model) for tokens in test_tokens])
-    
+    # Save vectorizer (REQUIRED for SHAP)
+    vec_filepath = 'results/models/tfidf_vectorizer.pkl'
+
+    with open(vec_filepath, "wb") as f:
+        pickle.dump(vectorizer, f)
+
     return X_train, X_val, X_test, y_train, y_val, y_test
+
 
 
 def load_data_transformers(

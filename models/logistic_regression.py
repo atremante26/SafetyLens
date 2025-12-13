@@ -9,7 +9,11 @@ def fit_logistic_regression():
     # Retrieving the appropriate data formatting for logistic regression
     X_train, X_val, X_test, y_train, y_val, y_test = load_data_sklearn()
 
-    model = LogisticRegression(random_state=42)
+    model = LogisticRegression(
+        max_iter = 2000,
+        solver="liblinear",
+        random_state=42
+        )
     model.fit(X_train, y_train)
 
     filepath = 'results/models/logistic_regression_model.pkl'
