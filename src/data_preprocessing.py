@@ -4,7 +4,7 @@ from sklearn.model_selection import train_test_split
 from gensim.models import Word2Vec
 from gensim.utils import simple_preprocess
 
-DATA_PATH = '../data/processed/dices_350_binary.csv'
+DATA_PATH = 'data/processed/dices_350_binary.csv'
 
 TARGET_COLS = [
     'Q_overall_binary',
