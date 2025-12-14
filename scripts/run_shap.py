@@ -38,30 +38,34 @@ def parse_args():
 
 
 def main():
+    # Parse arguments
     args = parse_args()
+
+    # Read in data
     df = pd.read_csv(args.data_csv)
 
+    # Sample examples
+    N_SHAP_EXAMPLES = 5
+    df_sample = df.sample(n=min(N_SHAP_EXAMPLES, len(df)), random_state=42)
     if args.model_type == "logreg":
-        out_path = Path(args.out_csv) / "logreg_shap.csv"
         run_shap_logistic_regression(
-            df=df,
+            df=df_sample,
             text_col="text",
             model_path=args.ckpt,
             vectorizer_path=args.vectorizer,
-            out_path=out_path
+            out_path=args.out_csv
         )
-        print(f"SHAP results saved to {out_path}")
+        print(f"SHAP results saved to {args.out_csv}")
 
     elif args.model_type == "single_task":
-        out_path = Path(args.out_csv) / "single_task_shap.csv"
         run_shap_single_task_transformer(
-            df=df,
+            df=df_sample,
             text_col="text",
             model_path=args.ckpt,
-            out_path=out_path,
-            device="cuda"
+            out_path=args.out_csv,
+            device="cpu"
         )
-        print(f"SHAP results saved to {out_path}")
+        print(f"SHAP results saved to {args.out_csv}")
 
     elif args.model_type == "multitask":
         TASK_IDX = {
@@ -72,16 +76,15 @@ def main():
         }
         task_idx = TASK_IDX[args.task]
 
-        out_path = Path(args.out_csv) / f"multi_task_shap_{args.task}.csv"
         run_shap_multi_task_transformer(
-            df=df,
+            df=df_sample,
             text_col="text",
             model_path=args.ckpt,
             task_idx=task_idx,
-            out_path=out_path,
-            device="cuda"
+            out_path=args.out_csv,
+            device="cpu"
         )
-        print(f"SHAP results saved to {out_path}")
+        print(f"SHAP results saved to {args.out_csv}")
 
     else:
         raise ValueError(f"Unknown model_type: {args.model_type}")
@@ -92,21 +95,29 @@ if __name__ == "__main__":
 
     
 """ 
-Example: 
+Multi-Task:
 python -m scripts.run_shap \
     --ckpt results/models/best_multitask_4.pt \
     --data_csv data/processed/dices_350_binary.csv \
     --model_type multitask \
     --task Q2_harmful \
-    --out_csv results/shap/shap_q2_harmful.csv 
+    --out_csv results/shap/multi_shap_q2_harmful.csv
     
-Example (logistic regression):
+Single Task:
+python -m scripts.run_shap \
+    --ckpt results/models/best_singletask.pt \
+    --data_csv data/processed/dices_350_binary.csv \
+    --model_type single_task \
+    --task Q_overall \
+    --out_csv results/shap/single_shap_q_overall.csv
+
+Logistic Regression:
 python -m scripts.run_shap \
     --ckpt results/models/logistic_regression_model.pkl \
     --data_csv data/processed/dices_350_binary.csv \
     --vectorizer results/models/tfidf_vectorizer.pkl \
     --model_type logreg \
     --task Q_overall \
-    --out_csv results/shap/shap_q_overall.csv 
+    --out_csv results/shap/logreg_shap_q_overall.csv 
     
 """

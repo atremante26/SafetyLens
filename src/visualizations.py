@@ -14,14 +14,10 @@ PRED_CSVS = {
 
 TASK = "Q_overall"
 
-# -----------------------
-# 1. Load aggregated metrics
-# -----------------------
+# Load metrics
 eval_df = pd.read_csv(EVAL_CSV)
 
-# -----------------------
-# 2. Grouped bar chart: F1 and PR-AUC
-# -----------------------
+# GROUPED BAR CHART (F1 and PR-AUC)
 fig, ax = plt.subplots(figsize=(8, 5))
 metrics = ["F1_pos", "PR_AUC"]
 width = 0.35
@@ -39,9 +35,8 @@ plt.tight_layout()
 plt.savefig("results/figures/q_overall_metrics_bar.png")
 plt.close()
 
-# -----------------------
-# 3. Probability distributions
-# -----------------------
+
+# PROBABILITY DISTRIBUTIONS
 # Create 2x2 grid
 fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 axes = axes.flatten()
@@ -70,11 +65,8 @@ for i, (model_name, csv_path) in enumerate(PRED_CSVS.items()):
 plt.tight_layout()
 plt.savefig("results/figures/q_overall_probability_distributions_2x2.png")
 plt.close()
-print("Saved 2x2 probability distribution plot to results/evaluation/q_overall_probability_distributions_2x2.png")
 
-# -----------------------
-# 4. Confusion matrices
-# -----------------------
+# CONFUSION MATRIX
 for model_name, csv_path in PRED_CSVS.items():
     df = pd.read_csv(csv_path)
     y_true = df[f"{TASK}_true"].values

@@ -1,0 +1,4 @@
+model,n_examples,n_attributions,n_unique_features,avg_attributions_per_example,mean_abs_shap,median_abs_shap,max_abs_shap,std_abs_shap,top_1_feature,top_1_importance,top_5_features,n_features_80pct
+Logistic Regression,5,100,44,20.0,0.046226429437652025,0.03165153566563535,0.1641717866208607,0.030924148066963947,response don,0.45302175078231355,"response don, alcohol, wine, don talk, campfire",23
+Single-Task Transformer,5,100,1,20.0,0.0004829719743098258,0.0003856604453176,0.0010997767496684,0.0003525817239615851,[''],0.04829719743098259,[''],1
+Multi-Task Transformer,5,100,1,20.0,0.00122667747782536,0.0003794007352553,0.0044577467488124,0.0016367995728220268,[''],0.122667747782536,[''],1
