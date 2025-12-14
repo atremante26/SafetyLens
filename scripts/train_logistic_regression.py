@@ -1,7 +1,6 @@
 import argparse
 
-from models.logistic_regression import fit_logistic_regression
-from models.logistic_regression import evaluate
+from models import fit_logistic_regression, evaluate
 
 from src.data_preprocessing import load_data_sklearn
 
@@ -32,7 +31,7 @@ if __name__ == "__main__":
 
 '''
 Example:
-python scripts/train_logistic_regression.py \
+python -m scripts.train_logistic_regression \
   --mod_out results/models/logistic_regression_model.pkl \
   --preds_out results/logistic_regression/test_preds.csv
 '''
