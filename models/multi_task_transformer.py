@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from transformers import RobertaModel, RobertaTokenizerFast
+from transformers import RobertaModel, AutoTokenizer
 from torch.utils.data import Dataset
 
 
@@ -31,41 +31,33 @@ class MultiTaskRoBERTa(nn.Module):
         super().__init__()
         self.tasks = tasks if tasks is not None else DEFAULT_TASKS
 
+        # Shared encoder (RoBERTa base model)
         self.roberta = RobertaModel.from_pretrained(model_name)
         hidden_size = self.roberta.config.hidden_size
 
+        # Define Dropout (for regularization)
         self.dropout = nn.Dropout(hidden_dropout_prob)
 
+        # Task-specific classification heads (one linear layer per task)
         self.heads = nn.ModuleDict({
             task: nn.Linear(hidden_size, 1) for task in self.tasks
         })
 
     def forward(self, input_ids, attention_mask):
+        # Encode input
         outputs = self.roberta(input_ids=input_ids, attention_mask=attention_mask)
 
         # CLS token representation
-        pooled = outputs.last_hidden_state[:, 0, :]  # [B, H]
+        pooled = outputs.last_hidden_state[:, 0, :]  
         pooled = self.dropout(pooled)
 
-        logits = {task: self.heads[task](pooled) for task in self.tasks}  # each [B, 1]
+        # Pass through each task-specific head
+        logits = {task: self.heads[task](pooled) for task in self.tasks} 
         return logits
-
-    def freeze_encoder(self):
-        for p in self.roberta.parameters():
-            p.requires_grad = False
-
-    def unfreeze_encoder(self):
-        for p in self.roberta.parameters():
-            p.requires_grad = True
-
 
 class MultiTaskDataset(Dataset):
     """
-    Dataset for 2-head or 4-head multitask training.
-
-    IMPORTANT:
-    - Labels are returned as float tensors (0.0/1.0) for BCEWithLogitsLoss.
-    - Each label is shape [1] so batching yields [B, 1].
+    Dataset for 2-head or 4-head multitask training
     """
     def __init__(self, dataframe, tokenizer, max_length=256, tasks=None):
         self.data = dataframe.reset_index(drop=True)
@@ -79,34 +71,66 @@ class MultiTaskDataset(Dataset):
                 raise ValueError(f"Unknown task '{t}'. Must be one of {list(TASK_TO_COL.keys())}")
 
     def __len__(self):
+        """
+        Return number of examples in dataset
+        """
         return len(self.data)
 
     def __getitem__(self, idx):
+        """
+        Get a single training example
+        """
         text = str(self.data.loc[idx, "text"])
 
+        # Tokenize text
         enc = self.tokenizer(
             text,
-            add_special_tokens=True,
             max_length=self.max_length,
             padding="max_length",
             truncation=True,
             return_tensors="pt",
         )
 
+        # Start with tokenized inputs
         item = {
             "input_ids": enc["input_ids"].squeeze(0),         # [L]
             "attention_mask": enc["attention_mask"].squeeze(0) # [L]
         }
 
-        # Labels as float (for BCEWithLogitsLoss)
+        # Add labels for each task as float tensors
         for task in self.tasks:
             col = TASK_TO_COL[task]
             val = self.data.loc[idx, col]
 
-            # Handle NaNs defensively (should already be removed in preprocessing)
-            if val != val:  # NaN check
+            # HDefensive check for NaN
+            if val != val:  
                 raise ValueError(f"NaN label found at idx={idx} task={task} col={col}")
 
-            item[f"labels_{task}"] = torch.tensor([float(val)], dtype=torch.float)  # [1]
+            # Store as [1] shape for proper batching
+            item[f"labels_{task}"] = torch.tensor([float(val)], dtype=torch.float)  
 
         return item
+
+
+def load_model(ckpt_path: str, device: torch.device):
+    """
+    Load a trained MultiTaskRoBERTa model
+    """
+    # Load from checkpoint
+    ckpt = torch.load(ckpt_path, map_location=device)
+    model_name = ckpt.get("model_name", "roberta-base")
+    tasks = ckpt["tasks"]
+
+    # Define Tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    # Define Model
+    model = MultiTaskRoBERTa(
+        model_name=model_name,
+        tasks=tasks,
+    ).to(device)
+
+    model.load_state_dict(ckpt["model_state_dict"])
+    model.eval()
+
+    return model, tokenizer, 
