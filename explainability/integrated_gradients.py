@@ -25,6 +25,38 @@ def prepare_inputs(text, tokenizer, device, max_length=128):
 
     return input_ids, attention_mask, tokens
 
+# FILTER TOKENS
+def filter_tokens(tokens, attributions, tokenizer):
+    """
+    Filter out special tokens and return cleaned lists.
+    
+    Special tokens like <s>, </s>, <pad> often get high attributions
+    but don't provide meaningful interpretability.
+    """
+    # Get special tokens from tokenizer
+    special_tokens = {
+        tokenizer.pad_token,
+        tokenizer.cls_token,
+        tokenizer.sep_token,
+        tokenizer.bos_token,
+        tokenizer.eos_token,
+        tokenizer.unk_token,
+        tokenizer.mask_token,
+    }
+    # Remove None values
+    special_tokens = {t for t in special_tokens if t is not None}
+    
+    # Filter tokens and attributions
+    filtered_tokens = []
+    filtered_attrs = []
+    
+    for tok, attr in zip(tokens, attributions):
+        if tok not in special_tokens:
+            filtered_tokens.append(tok)
+            filtered_attrs.append(attr)
+    
+    return filtered_tokens, np.array(filtered_attrs)
+
 # PREDICTION
 @torch.no_grad()
 def predict_binary(model, input_ids, attention_mask, model_type, task=None, threshold=0.5):
@@ -33,23 +65,51 @@ def predict_binary(model, input_ids, attention_mask, model_type, task=None, thre
     '''
     model.eval()
 
-    # Get logits based on model type
-    if model_type == "multitask" and task is None:
-        logits = model(input_ids, attention_mask)[task]  # [B,1] or [B]
+    if model_type == "multitask":
+        # Multi-task returns dict
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+        logits = outputs[task] 
+        
+        # Handle shape
+        if logits.dim() == 1:
+            logits = logits.unsqueeze(-1)  
+        
+        # Convert to probability
+        prob = torch.sigmoid(logits).squeeze(-1) 
+        pred = (prob >= threshold).long()
+        
+        return (
+            float(prob.item()),
+            int(pred.item()),
+            float(logits.squeeze().item())
+        )
+    
     else:  # single_task
-        out = model(input_ids, attention_mask)
-        logits = out.logits if hasattr(out, "logits") else out # Handle possible SequenceClassifierOutput or raw tensor
-
-        # Handle different output shapes
+        output = model(input_ids=input_ids, attention_mask=attention_mask)
+        
+        # Handle SequenceClassifierOutput or raw tensor
+        if hasattr(output, 'logits'):
+            logits = output.logits
+        else:
+            logits = output
+        
+        # Handle different shapes
         if logits.shape[-1] == 2:  # Cross-entropy
-            logits = logits[:, 1:2] # Extract positive class
-
-    # Convert to scalars
-    logits = logits.squeeze()
-    prob = torch.sigmoid(logits).item() # Convert logit to probability
-    pred = int(prob >= threshold) # Apply threshold
-
-    return prob, pred, float(logits.item())
+            logits = logits[:, 1:2]
+        elif logits.shape[-1] == 1:  # BCE
+            pass
+        else:
+            raise ValueError(f"Unexpected logits shape: {logits.shape}")
+        
+        # Convert to probability
+        prob = torch.sigmoid(logits).squeeze(-1)
+        pred = (prob >= threshold).long()
+        
+        return (
+            float(prob.item()),
+            int(pred.item()),
+            float(logits.squeeze().item())
+        )
 
 # COMPUTE INTEGRATED GRADIENTS
 def compute_integrated_gradients(
@@ -61,6 +121,7 @@ def compute_integrated_gradients(
     device="cuda",
     max_length=128,
     n_steps=25,
+    filter=True
 ):
     '''
     Compute Integrated Gradients token attribution for a text example
@@ -134,6 +195,25 @@ def compute_integrated_gradients(
     mask = attention_mask.squeeze(0).cpu().numpy().astype(bool)
     tokens = [t for t, m in zip(tokens, mask) if m]
     token_attrs = token_attrs[mask]
+
+    # Filter special tokens
+    if filter:
+        tokens, token_attrs = filter_tokens(tokens, token_attrs, tokenizer)
+
+    # Check if any tokens left after filtering
+    if len(tokens) == 0:
+        return {
+            "text": text,
+            "model_type": model_type,
+            "task": task if task is not None else "single_task",
+            "tokens": [],
+            "attributions": np.array([]),
+            "prob": 0.0,
+            "pred": 0,
+            "logit": 0.0,
+            "convergence_delta": 0.0,
+            "metrics": {"mean_abs": 0.0, "std_abs": 0.0, "max_abs": 0.0, "sparsity": 1.0},
+        } # Return placeholder results
 
     # Normalize attributions to [-1, 1]
     token_attrs = token_attrs / (np.max(np.abs(token_attrs)) + 1e-9)

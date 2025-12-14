@@ -11,11 +11,9 @@ from explainability import compute_integrated_gradients, top_k_tokens
 
 # CONFIG
 MAX_LEN = 128          
-N_EXAMPLES = 25        # number of rows to run IG on
-N_STEPS = 25           # IG integration steps
-TOP_K = 12             # number of top tokens to save
+TOP_K = 12             
 SEED = 42
-THRESH = 0.5           # for pred in predict_binary()
+THRESH = 0.5        
 
 TASK_TO_LABEL_COL = {
     "Q_overall": "Q_overall_binary",
@@ -31,6 +29,8 @@ def parse_args():
     p.add_argument("--data_csv", required=True, help="Processed dataset CSV")
     p.add_argument("--model_type", required=True, choices=["multitask", "singletask"], help="Type of model checkpoint")
     p.add_argument("--task", required=True, choices=list(TASK_TO_LABEL_COL.keys()))
+    p.add_argument("--n_examples", type=int, default=30, help="Number of examples to analyze (default: 30)")
+    p.add_argument("--n_steps", type=int, default=50, help="IG integration steps for quality (default: 50, higher = better convergence)")
     p.add_argument("--out_csv", required=True, help="Output CSV for IG results")
     return p.parse_args()
 
@@ -122,7 +122,7 @@ def main():
         raise ValueError("No valid rows after filtering (need label in {0,1} and non-null text).")
 
     # Sample Examples
-    df_sample = df.sample(n=min(N_EXAMPLES, len(df)), random_state=SEED).reset_index(drop=True)
+    df_sample = df.sample(n=min(args.n_examples, len(df)), random_state=SEED).reset_index(drop=True)
     print(f"Running IG on {len(df_sample)} examples (task={args.task})")
 
     # Run Integrated Gradients
@@ -141,7 +141,7 @@ def main():
             task=(args.task if args.model_type == "multitask" else None),
             device=str(device),
             max_length=MAX_LEN,
-            n_steps=N_STEPS,
+            n_steps=args.n_steps,
         )
 
         # Extract top-k most influential tokens
@@ -177,19 +177,33 @@ if __name__ == "__main__":
     main()
 
 """
-Example (Multi Task):
+Multi-Task 2-Head
 python -m scripts.run_integrated_gradients \
-  --ckpt results/models/best_multitask_4.pt \
-  --data_csv data/processed/dices_350_binary.csv \
-  --model_type multitask \
-  --task Q2_harmful \
-  --out_csv results/ig/ig_q2_harmful.csv
+    --ckpt results/models/best_multitask_2.pt \
+    --data_csv data/processed/dices_350_binary.csv \
+    --model_type multitask \
+    --task Q2_harmful \
+    --n_examples 30 \
+    --n_steps 50 \
+    --out_csv results/ig/ig_2task_q2.csv
 
-Example (Single Task):
+Multi-Task 4-Head
 python -m scripts.run_integrated_gradients \
-  --ckpt results/models/best_singletask.pt \
-  --data_csv data/processed/dices_350_binary.csv \
-  --model_type singletask \
-  --task Q_overall \
-  --out_csv results/ig/ig_results_single_q_overall_sample.csv
+    --ckpt results/models/best_multitask_4.pt \
+    --data_csv data/processed/dices_350_binary.csv \
+    --model_type multitask \
+    --task Q2_harmful \
+    --n_examples 30 \
+    --n_steps 50 \
+    --out_csv results/ig/ig_4task_q2.csv
+
+# Single-Task
+python -m scripts.run_integrated_gradients \
+    --ckpt results/models/best_singletask.pt \
+    --data_csv data/processed/dices_350_binary.csv \
+    --model_type singletask \
+    --task Q_overall \
+    --n_examples 30 \
+    --n_steps 25 \
+    --out_csv results/ig/ig_single_q.csv
 """
