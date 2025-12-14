@@ -78,3 +78,9 @@ def load_finetuned(model_path, device="cuda"):
     )
 
     state = torch.load(model_path, map_location=device)
+    model.load_state_dict(state)
+
+    model.to(device)
+    model.eval()
+    return model, tokenizer
+        
