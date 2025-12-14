@@ -6,6 +6,7 @@ import pandas as pd
 from pathlib import Path
 from scipy.sparse import csr_matrix
 from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
+from models import MultiTaskRoBERTa
 
 # Configuration
 LOGREG_PATH = Path("results/models/logistic_regression_model.pkl")
@@ -133,59 +134,93 @@ def run_shap_single_task_transformer(
 # ----------------------
 # MULTI TASK TRANSFORMER
 # ----------------------
-def predict_multi_task(texts, model, tokenizer, task_idx, device):
+def predict_multi_task(texts, model, tokenizer, task_name, device):
+    # texts is a list[str]
     enc = tokenizer(
         texts,
         padding=True,
         truncation=True,
+        max_length=128,
         return_tensors="pt"
-    ).to(device)
+    )
+    enc = {k: v.to(device) for k, v in enc.items()}
 
     with torch.no_grad():
-        logits = model(**enc).logits[:, task_idx]
-        probs = torch.sigmoid(logits)
+        outputs = model(enc["input_ids"], enc["attention_mask"])  # MultiTaskRoBERTa forward
+        logits = outputs[task_name].squeeze(-1)  # [B]
+        probs = torch.sigmoid(logits)            # [B]
 
-    return probs.cpu().numpy().reshape(-1, 1)
+    return probs.detach().cpu().numpy().reshape(-1, 1)
 
 
 def run_shap_multi_task_transformer(
     df,
     text_col,
-    model_path,
-    task_idx,
+    model_path,   # this is your ckpt path
+    task_name,
     out_path,
     max_tokens=20,
     device="cpu",
+    n_examples=25,
 ):
     """
-    Run SHAP for a multi-task transformer on a specified task head.
+    Run SHAP for MultiTaskRoBERTa checkpoint on a specified task head.
     """
 
+    out_path = Path(out_path)
     ensure_dir(out_path.parent)
 
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = AutoModel.from_pretrained(model_path).to(device)
+    print("\n=== DEBUG: loading multitask checkpoint ===")
+    print("ckpt path:", model_path)
+    ckpt = torch.load(model_path, map_location=device)
+    print("ckpt keys:", list(ckpt.keys()))
+    print("ckpt model_name:", ckpt.get("model_name"))
+    print("ckpt tasks:", ckpt.get("tasks"))
+
+    model_name = ckpt.get("model_name", "roberta-base")
+    tasks = ckpt.get("tasks", None)
+    if tasks is None:
+        raise ValueError("Checkpoint missing 'tasks' key — not a multitask checkpoint?")
+
+    if task_name not in tasks:
+        raise ValueError(f"task_name={task_name} not in ckpt tasks={tasks}")
+
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = MultiTaskRoBERTa(model_name=model_name, tasks=tasks).to(device)
+    model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
 
+    print("\n=== DEBUG: sampling texts ===")
+    df = df.dropna(subset=[text_col]).reset_index(drop=True)
+    df_small = df.sample(n=min(n_examples, len(df)), random_state=42).reset_index(drop=True)
+    print("n_examples:", len(df_small))
+    print("sample text:", df_small.loc[0, text_col][:120])
+
+    # Quick smoke test: can we get a probability?
+    print("\n=== DEBUG: forward smoke test ===")
+    p = predict_multi_task([df_small.loc[0, text_col]], model, tokenizer, task_name, device)
+    print("pred prob shape:", p.shape, "value:", float(p[0, 0]))
+
+    # SHAP explainer
     explainer = shap.Explainer(
-        lambda x: predict_multi_task(x, model, tokenizer, task_idx, device),
+        lambda x: predict_multi_task(x, model, tokenizer, task_name, device),
         shap.maskers.Text(tokenizer),
     )
 
     rows = []
-
-    for i, text in enumerate(df[text_col].astype(str)):
+    for i, text in enumerate(df_small[text_col].astype(str).tolist()):
         sv = explainer([text])[0]
-
         tokens = sv.data
         values = sv.values
 
-        top_idx = np.argsort(np.abs(values))[::-1][:max_tokens]
+        # values can come back as shape (num_tokens, 1) sometimes
+        values = np.array(values).squeeze()
 
+        top_idx = np.argsort(np.abs(values))[::-1][:max_tokens]
         for j in top_idx:
             rows.append({
                 "model": "multi_task_transformer",
-                "task_idx": task_idx,
+                "task": task_name,
                 "row_index": i,
                 "token": tokens[j],
                 "shap_value": float(values[j]),
@@ -193,3 +228,4 @@ def run_shap_multi_task_transformer(
             })
 
     pd.DataFrame(rows).to_csv(out_path, index=False)
+    print("Saved SHAP:", str(out_path))

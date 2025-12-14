@@ -29,7 +29,7 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--ckpt", required=True, help="Path to model checkpoint (.pt)")
     p.add_argument("--data_csv", required=True, help="Processed dataset CSV")
-    p.add_argument("--model_type", required=True, choices=["multitask", "single_task"], help="Type of model checkpoint")
+    p.add_argument("--model_type", required=True, choices=["multitask", "singletask"], help="Type of model checkpoint")
     p.add_argument("--task", required=True, choices=list(TASK_TO_LABEL_COL.keys()))
     p.add_argument("--out_csv", required=True, help="Output CSV for IG results")
     return p.parse_args()
@@ -41,30 +41,48 @@ def set_seed(seed: int):
     torch.cuda.manual_seed_all(seed)
 
 def load_model(ckpt_path, model_type, device):
+    """
+    Load model and tokenizer from checkpoint
+    """
+    # Load checkpoint
     ckpt = torch.load(ckpt_path, map_location=device)
-
-    model_name = ckpt.get("model_name", "roberta-base")
+    
+    # Detect checkpoint format by checking if it has model parameter keys
+    is_direct_state_dict = isinstance(ckpt, dict) and (
+        'roberta.embeddings.word_embeddings.weight' in ckpt or
+        'classifier.dense.weight' in ckpt
+    )
+    
+    if is_direct_state_dict:
+        # Partner's format: checkpoint IS the state_dict
+        state_dict = ckpt
+        model_name = "roberta-base"
+        tasks = None
+    else:
+        # Our format: checkpoint is a wrapper dict with metadata
+        model_name = ckpt.get("model_name", "roberta-base")
+        tasks = ckpt.get("tasks", None)
+        state_dict = ckpt.get("model_state_dict", ckpt.get("state_dict", ckpt))
+    
+    # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    tasks = ckpt.get("tasks", None)
-
+    # Initialize model architecture
     if model_type == "multitask":
-        if tasks is None:
-            raise ValueError("Checkpoint missing `tasks` but model_type=multitask was provided.")
-
         model = MultiTaskRoBERTa(
             model_name=model_name,
             tasks=tasks
         ).to(device)
-
     else:  # single_task
-        num_labels = ckpt.get("num_labels", 2)
         model = AutoModelForSequenceClassification.from_pretrained(
             model_name,
-            num_labels=num_labels
+            num_labels=2,
+            id2label={0: "safe", 1: "unsafe"},
+            label2id={"safe": 0, "unsafe": 1}
         ).to(device)
 
-    model.load_state_dict(ckpt["model_state_dict"])
+    # Load trained weights (suppress HuggingFace warnings during load)
+    model.load_state_dict(state_dict)
     model.eval()
 
     return model, tokenizer, model_name, tasks
@@ -159,11 +177,19 @@ if __name__ == "__main__":
     main()
 
 """
-Example:
+Example (Multi Task):
 python -m scripts.run_integrated_gradients \
   --ckpt results/models/best_multitask_4.pt \
   --data_csv data/processed/dices_350_binary.csv \
   --model_type multitask \
   --task Q2_harmful \
   --out_csv results/ig/ig_q2_harmful.csv
+
+Example (Single Task):
+python -m scripts.run_integrated_gradients \
+  --ckpt results/models/best_singletask.pt \
+  --data_csv data/processed/dices_350_binary.csv \
+  --model_type singletask \
+  --task Q_overall \
+  --out_csv results/ig/ig_results_single_q_overall_sample.csv
 """

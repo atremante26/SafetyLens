@@ -16,7 +16,7 @@ def prepare_inputs(text, tokenizer, device, max_length=128):
         return_tensors="pt",    # Return PyTorch tensors
     )
     
-    # Move tensors to appropriate device (CPU or GPU
+    # Move tensors to appropriate device (CPU or GPU)
     input_ids = enc["input_ids"].to(device)
     attention_mask = enc["attention_mask"].to(device)
 
