@@ -3,7 +3,7 @@ from sklearn.metrics import precision_recall_curve, auc, f1_score
 
 # Paths to prediction CSVs
 LOGREG_PATH = "results/logistic_regression/test_preds.csv"
-#SINGLE_TASK_PATH = "results/single_task/test_preds.csv"
+SINGLE_TASK_PATH = "results/single_task_transformer/test_preds.csv"
 MULTI_TASK_2_PATH = "results/multi_task_transformer/test_predictions_2.csv"
 MULTI_TASK_4_PATH = "results/multi_task_transformer/test_predictions_4.csv"
 
@@ -45,20 +45,20 @@ def load_and_prepare(path):
 def main():
     # Load predictions
     logreg_df = load_and_prepare(LOGREG_PATH)
-    # single_df = load_and_prepare(SINGLE_TASK_PATH)
+    single_df = load_and_prepare(SINGLE_TASK_PATH)
     multi_2_df = load_and_prepare(MULTI_TASK_2_PATH)
     multi_4_df = load_and_prepare(MULTI_TASK_4_PATH)
 
     # Evaluate each model
     logreg_results = evaluate_model(logreg_df)
-    # single_results = evaluate_model(single_df)
+    single_results = evaluate_model(single_df)
     multi_2_results = evaluate_model(multi_2_df)
     multi_4_results = evaluate_model(multi_4_df)
 
     # Aggregate results
     rows = [
         {"model": "logreg", "task": TASK, **logreg_results},
-        # {"model": "single_task", "task": TASK, **single_results},
+        {"model": "single_task", "task": TASK, **single_results},
         {"model": "multi_task_2", "task": TASK, **multi_2_results},
         {"model": "multi_task_4", "task": TASK, **multi_4_results},
     ]
@@ -68,7 +68,6 @@ def main():
     print("Saved evaluation results to results/evaluation/model_comparison_q_overall.csv\n")
 
 
-    """
     # --- H1: Transformer superiority ---
     print("H1: Transformer Superiority over Linear Baselines")
     print(f"LR F1={logreg_results['F1_pos']:.3f}, ST F1={single_results['F1_pos']:.3f}, "
@@ -87,7 +86,6 @@ def main():
     print("H3: Positive class prevalence for Q_overall")
     print(f"Positive rate={logreg_results['positive_rate']:.3f}")
 
-    """
 
 if __name__ == "__main__":
     main()
