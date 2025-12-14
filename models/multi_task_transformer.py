@@ -16,11 +16,7 @@ TASK_TO_COL = {
 
 class MultiTaskRoBERTa(nn.Module):
     """
-    Shared RoBERTa encoder + separate heads per task.
-
-    For binary tasks:
-        - Each head outputs a single logit per example: shape [B, 1]
-        - Use BCEWithLogitsLoss in training code
+    Shared RoBERTa encoder + separate heads per task
     """
     def __init__(
         self,
