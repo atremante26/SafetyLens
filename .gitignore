@@ -228,8 +228,8 @@ data/raw/*
 !results/models/best_multitask_4.pt
 
 # Ignore figures generated locally
-results/figures/*
-!results/figures/individual_ratings_distribution.png
+#results/figures/*
+#!results/figures/individual_ratings_distribution.png
 
 # Allow prediction CSVs
 !results/multi_task_transformer/test_predictions_*.csv
