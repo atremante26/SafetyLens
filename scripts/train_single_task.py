@@ -114,3 +114,64 @@ def run_predictions(
     print("loading data")
     # Dataset + DataLoader
     dataset = HateSpeechDataset(
+        df,
+        tokenizer,
+        label_col=label_col,
+        max_length=max_length
+    )
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+    all_preds = []
+    all_probs = []
+    all_labels = []
+    print("starting preds")
+    for batch in loader:
+        batch = {k: v.to(device) for k, v in batch.items()}
+
+        outputs = model(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+        )
+
+        logits = outputs.logits
+        probs = torch.softmax(logits, dim=-1)
+
+        preds = torch.argmax(probs, dim=-1)
+
+        all_preds.extend(preds.cpu().tolist())
+        all_probs.extend(probs.cpu().tolist())
+        all_labels.extend(batch["labels"].cpu().tolist())
+
+    results_df = pd.DataFrame({
+        "Q_overall_true": all_labels,
+        "Q_overall_pred": all_preds,
+        "Q_overall_prob": [p[1] for p in all_probs],
+    })
+
+    results_df.to_csv(output_csv, index=False)
+    print(f"Saved predictions to {output_csv}")
+
+def main():
+    data_path = "data/processed/dices_350_binary.csv"
+    df = pd.read_csv(data_path)
+
+    print("splitting train/test/validation...")
+    train_df, val_df = train_test_split(
+        df,
+        test_size=0.2,
+        random_state=67,
+        stratify=df["Q_overall_binary"],
+    )
+
+    print("calling training function...")
+    train(train_df=train_df,
+        val_df=val_df,
+        batch_size=64,
+        lr=2e-5,
+        epochs=3,
+        max_length=128,
+        output_dir="results",
+        )
+
+if __name__ == "__main__":
+    main()
