@@ -3,9 +3,9 @@ from sklearn.metrics import precision_recall_curve, auc, f1_score
 
 # Paths to prediction CSVs
 LOGREG_PATH = "results/logistic_regression/test_preds.csv"
-SINGLE_TASK_PATH = "results/single_task/test_preds.csv"
-MULTI_TASK_2_PATH = "results/multi_task/test_predictions_2.csv"
-MULTI_TASK_4_PATH = "results/multi_task/test_predictions_4.csv"
+#SINGLE_TASK_PATH = "results/single_task/test_preds.csv"
+MULTI_TASK_2_PATH = "results/multi_task_transformer/test_predictions_2.csv"
+MULTI_TASK_4_PATH = "results/multi_task_transformer/test_predictions_4.csv"
 
 # Only evaluating overall safety
 TASK = "Q_overall"
@@ -18,8 +18,10 @@ def compute_pr_auc(y_true, y_probs):
 def evaluate_model(df):
     """Compute PR-AUC, F1 (positive class), and positive rate for Q_overall."""
     y_true = df[f"{TASK}_true"].values
-    y_pred = df[f"{TASK}_pred"].values
     y_prob = df[f"{TASK}_prob"].values
+
+    # Generate predictions from probabilities (threshold 0.5)
+    y_pred = (y_prob >= 0.5).astype(int)
 
     f1 = f1_score(y_true, y_pred, pos_label=1)
     pr_auc = compute_pr_auc(y_true, y_prob)
@@ -34,7 +36,7 @@ def evaluate_model(df):
 def load_and_prepare(path):
     """Load CSV and verify necessary columns exist."""
     df = pd.read_csv(path)
-    required_cols = [f"{TASK}_true", f"{TASK}_pred", f"{TASK}_prob"]
+    required_cols = [f"{TASK}_true", f"{TASK}_prob"]
     for col in required_cols:
         if col not in df.columns:
             raise ValueError(f"Missing column {col} in {path}")
@@ -43,20 +45,20 @@ def load_and_prepare(path):
 def main():
     # Load predictions
     logreg_df = load_and_prepare(LOGREG_PATH)
-    single_df = load_and_prepare(SINGLE_TASK_PATH)
+    # single_df = load_and_prepare(SINGLE_TASK_PATH)
     multi_2_df = load_and_prepare(MULTI_TASK_2_PATH)
     multi_4_df = load_and_prepare(MULTI_TASK_4_PATH)
 
     # Evaluate each model
     logreg_results = evaluate_model(logreg_df)
-    single_results = evaluate_model(single_df)
+    # single_results = evaluate_model(single_df)
     multi_2_results = evaluate_model(multi_2_df)
     multi_4_results = evaluate_model(multi_4_df)
 
     # Aggregate results
     rows = [
         {"model": "logreg", "task": TASK, **logreg_results},
-        {"model": "single_task", "task": TASK, **single_results},
+        # {"model": "single_task", "task": TASK, **single_results},
         {"model": "multi_task_2", "task": TASK, **multi_2_results},
         {"model": "multi_task_4", "task": TASK, **multi_4_results},
     ]
@@ -65,6 +67,8 @@ def main():
     results_df.to_csv("results/evaluation/model_comparison_q_overall.csv", index=False)
     print("Saved evaluation results to results/evaluation/model_comparison_q_overall.csv\n")
 
+
+    """
     # --- H1: Transformer superiority ---
     print("H1: Transformer Superiority over Linear Baselines")
     print(f"LR F1={logreg_results['F1_pos']:.3f}, ST F1={single_results['F1_pos']:.3f}, "
@@ -82,6 +86,8 @@ def main():
     # --- H3: Class imbalance effect ---
     print("H3: Positive class prevalence for Q_overall")
     print(f"Positive rate={logreg_results['positive_rate']:.3f}")
+
+    """
 
 if __name__ == "__main__":
     main()
