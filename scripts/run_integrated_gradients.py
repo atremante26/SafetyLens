@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from models import MultiTaskRoBERTa
+from models import MultiTaskRoBERTa, load_model
 from explainability import compute_integrated_gradients, top_k_tokens
 
 # CONFIG
@@ -41,33 +41,33 @@ def set_seed(seed: int):
     torch.cuda.manual_seed_all(seed)
 
 def load_model(ckpt_path, model_type, device):
-    # Load checkpoint directory
     ckpt = torch.load(ckpt_path, map_location=device)
 
-    # Extract metadata from checkpoint
     model_name = ckpt.get("model_name", "roberta-base")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
+
     tasks = ckpt.get("tasks", None)
 
-    # Initialize model based on type
     if model_type == "multitask":
+        if tasks is None:
+            raise ValueError("Checkpoint missing `tasks` but model_type=multitask was provided.")
+
         model = MultiTaskRoBERTa(
             model_name=model_name,
-            tasks=ckpt["tasks"]
-        ).to(device)
-    else:
-        model = AutoModelForSequenceClassification.from_pretrained(
-            model_name,
-            num_labels=2,
-            id2label={0: "safe", 1: "unsafe"},
-            label2id={"safe": 0, "unsafe": 1}
+            tasks=tasks
         ).to(device)
 
-    # Load trained weights
+    else:  # single_task
+        num_labels = ckpt.get("num_labels", 2)
+        model = AutoModelForSequenceClassification.from_pretrained(
+            model_name,
+            num_labels=num_labels
+        ).to(device)
+
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
 
-    return model, tokenizer, tasks, model_name
+    return model, tokenizer, model_name, tasks
 
 # MAIN
 def main():
@@ -78,13 +78,13 @@ def main():
     print("Device:", device)
 
     # Load Model
-    model, tokenizer, model_type, tasks, model_name = load_model(args.ckpt, args.model_type, device)
+    model, tokenizer, model_name, tasks = load_model(args.ckpt, args.model_type, device)
     print("Model:", model_name)
-    print("Model type:", model_type)
+    print("Model type:", args.model_type)
     print("Tasks in ckpt:", tasks)
 
     # Validate task exists for multitask models
-    if model_type == "multitask" and args.task not in tasks:
+    if args.model_type == "multitask" and args.task not in (tasks or []):
         raise ValueError(f"Task {args.task} not found in checkpoint tasks {tasks}")
 
     # Load and Filter Data
@@ -119,8 +119,8 @@ def main():
             text=text,
             model=model,
             tokenizer=tokenizer,
-            model_type=model_type,
-            task=(args.task if model_type == "multitask" else None),
+            model_type=args.model_type,
+            task=(args.task if args.model_type == "multitask" else None),
             device=str(device),
             max_length=MAX_LEN,
             n_steps=N_STEPS,
@@ -160,7 +160,7 @@ if __name__ == "__main__":
 
 """
 Example:
-python scripts/run_integrated_gradients.py \
+python -m scripts.run_integrated_gradients \
   --ckpt results/models/best_multitask_4.pt \
   --data_csv data/processed/dices_350_binary.csv \
   --model_type multitask \
