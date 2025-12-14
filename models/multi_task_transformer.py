@@ -133,4 +133,4 @@ def load_model(ckpt_path: str, device: torch.device):
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
 
-    return model, tokenizer, 
+    return model, tokenizer
