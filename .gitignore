@@ -235,7 +235,7 @@ results/figures/*
 !results/multi_task_transformer/test_predictions_*.csv
 
 # Ignore other large result dumps
-!results/models/*.pt
+results/models/*.pt
 .DS_Store
 
 # Integrated Gradients results
