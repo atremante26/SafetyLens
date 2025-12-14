@@ -18,13 +18,13 @@ from sklearn.metrics import (
 )
 
 from models import MultiTaskRoBERTa, MultiTaskDataset
-from data_preprocessing import load_multi_task_data
+from src.data_preprocessing import load_multi_task_data
 
 SEED = 42
 MODEL_NAME = "roberta-base"
 MAX_LEN = 256
 BATCH_SIZE = 16
-EPOCHS = 3          # set 5 manually when running 4-head i
+EPOCHS = 3          # set 5 manually when running 4-head 
 LR = 2e-5
 WARMUP_FRAC = 0.1
 NUM_WORKERS = 0     
@@ -127,9 +127,10 @@ def evaluate(model, loader, tasks, device, loss_fns) -> Tuple[float, Dict[str, D
             logits = outputs[t]
             loss = loss + loss_fns[t](logits, y)
 
-            prob = torch.sigmoid(logits).detach().cpu().numpy()
+            prob = torch.sigmoid(logits).squeeze(-1).detach().cpu().numpy()   
+            true = y.squeeze(-1).detach().cpu().numpy()                     
             all_prob[t].extend(prob.tolist())
-            all_true[t].extend(y.detach().cpu().numpy().tolist())
+            all_true[t].extend(true.tolist())
 
         loss = loss / len(tasks)
         running += float(loss.item())
@@ -138,7 +139,7 @@ def evaluate(model, loader, tasks, device, loss_fns) -> Tuple[float, Dict[str, D
     return running / max(len(loader), 1), metrics
 
 @torch.no_grad()
-def predict_df(model, loader, df_source, tasks, device) -> pd.DataFrame:
+def predict(model, loader, df_source, tasks, device) -> pd.DataFrame:
     model.eval()
     rows = []
     df_source = df_source.reset_index(drop=True)
@@ -156,7 +157,7 @@ def predict_df(model, loader, df_source, tasks, device) -> pd.DataFrame:
             for t in tasks:
                 col = TASK_TO_COL[t]
                 row[f"{t}_true"] = int(df_source.loc[idx, col])
-                row[f"{t}_prob"] = float(torch.sigmoid(outputs[t][i]).item())
+                row[f"{t}_prob"] = float(torch.sigmoid(outputs[t][i]).squeeze().item())
             rows.append(row)
             idx += 1
 
@@ -251,7 +252,7 @@ def main():
         m = te_metrics[t]
         print(f"{t}: acc={m['accuracy']:.3f} f1_pos={m['f1_pos']:.3f} pr_auc={m['pr_auc']:.3f}")
 
-    preds = predict_df(model, test_loader, test_df, tasks, device)
+    preds = predict(model, test_loader, test_df, tasks, device)
     preds.to_csv(args.preds_out, index=False)
     print("Saved predictions:", args.preds_out)
 
@@ -260,13 +261,13 @@ if __name__ == "__main__":
 
 '''
 2 Task Example:
-python scripts/multitask_training.py \
+python -m scripts.train_multitask \
   --tasks 2 \
   --ckpt_out results/models/best_multitask_2.pt \
   --preds_out results/multi_task_transformer/test_predictions_2.csv
 
 4 Task Example:
-python scripts/multitask_training.py \
+python -m scripts.train_multitask \
   --tasks 4 \
   --ckpt_out results/models/best_multitask_4.pt \
   --preds_out results/multi_task_transformer/test_predictions_4.csv
