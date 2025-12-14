@@ -64,9 +64,9 @@ def evaluate(model, X_test, y_test, PATH_PRED):
 
     # Save predictions
     df_preds = pd.DataFrame({
-        "logit": logits,
-        "probability": probs,
-        "prediction": y_pred
+        "Q_overall_true": y_test,
+        "Q_overall_prob": probs,
+        "Q_overall_pred": y_pred
     })
 
     df_preds.to_csv(PATH_PRED, index=False)

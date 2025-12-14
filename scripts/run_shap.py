@@ -53,7 +53,7 @@ def main():
             df=df,
             text_col="text",
             model_path=args.ckpt,
-            out_path=f"{args.out_csv} /single_task",
+            out_path=f"{args.out_csv}/single_task",
             device="cuda"  # or "cpu"
         )
 
