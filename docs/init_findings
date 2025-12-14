@@ -1,0 +1,54 @@
+# Initial Findings
+
+This document summarizes preliminary findings from evaluating **transformer-based models** for binary safety detection (Safe = 0, Not Safe = 1) across multiple safety dimensions derived from the DICES dataset. Both **model performance** and **model explainability** (via SHAP / Integrated Gradients) are considered.
+
+---
+
+## 1. Performance Findings
+
+### H1: Transformer Superiority over Linear Baselines
+
+**Observation:**  
+- Logistic regression baseline achieved PR-AUC = `0.414` and F1 (positive class) = `0.422` for `Q_overall`.  
+- Single-task transformer improved PR-AUC to `0.660` and F1 to `0.543`.  
+- Multi-task transformer (2-task) achieved PR-AUC = `0.366` and F1 = `0.469`.
+- Multi-task transformer (4-task) acheived PR-AUC = `0.369` and F1 = `0.461`.
+
+**Interpretation:**  
+- The single-task transformer model performed much better than the baseline logistic regression and both multi-task transformer models
+- Multi-task transformer models did not noticeably outperform the single-task transformer.
+
+**Figure 1:** PR-AUC and F1 comparison across models  
+![PR-AUC and F1 Comparison](results/figures/q_overall_metrics_bar.png)
+
+---
+
+### H2: Benefits of Multi-Task Learning
+
+**Observation:**  
+- Single-task F1 for `Q_overall`: `0.660`  
+- Multi-task 2 F1: `0.469`  
+- Multi-task 4 F1: `0.461`  
+
+**Interpretation:**  
+- Multi-task learning did not improve model performance for detecting unsafe texts
+- Adding more heads to the transformer did not lead to improvements in model performance.
+    - We believe this to be an issue of disagreement between heads
+
+---
+
+### H3: Task Difficulty and Class Imbalance Effects
+
+- Will update with more results from different class effects
+
+---
+
+
+## 3. Summary
+
+- Transformer models outperform logistic regression, validating H1.  
+- Multi-task learning **does not** improve model performance, rejecting H2. 
+
+**Next Steps:**  
+- Further analyze the multi-task models for differences between classes of unsafe texts.
+- Complete and evaluate our explanation techniques.
