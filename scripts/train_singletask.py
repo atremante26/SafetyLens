@@ -4,8 +4,11 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from transformers import get_scheduler
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from models.single_task_transformer import HateSpeechDataset, load_model, load_finetuned, MODEL_NAME, label2id
 
-from models.single_task_transformer import HateSpeechDataset, load_model, MODEL_NAME, label2id
+#https://huggingface.co/learn/llm-course/chapter3/4
 
 @torch.no_grad()
 def evaluate(model, dataloader, device):
@@ -31,31 +34,21 @@ def evaluate(model, dataloader, device):
     return avg_loss, acc
 
 
-def train(
-    train_df,
-    val_df,
-    batch_size=16,
-    lr=2e-5,
-    epochs=20,
-    max_length=256,
-    output_dir="results",
-):
-    seed(67)
+def train(train_df,val_df,batch_size,lr,epochs,max_length,output_dir="results"):
+    random.seed(67)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # init model + tokenizer from your models/single_task_transformer.py
+    print("Loading model...")
     model, tokenizer = load_model(model_name=MODEL_NAME, device=device)
 
-    # datasets
-    train_ds = HateSpeechDataset(train_df, tokenizer, max_length=max_length)
-    val_ds = HateSpeechDataset(val_df, tokenizer, max_length=max_length)
+    print("Loading datasets...")
+    train_ds = HateSpeechDataset(train_df, tokenizer,label_col="Q_overall_binary", max_length=max_length)
+    val_ds = HateSpeechDataset(val_df, tokenizer,label_col="Q_overall_binary", max_length=max_length)
 
-    # loaders
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
 
-    # optimizer + scheduler
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 
     num_training_steps = epochs * len(train_loader)
@@ -66,12 +59,11 @@ def train(
         num_training_steps=num_training_steps,
     )
 
-
+    print("begining training loop...")
     global_step = 0
     for epoch in range(epochs):
         model.train()
         running_loss = 0.0
-
         for batch in train_loader:
             batch = {k: v.to(device) for k, v in batch.items()}
 
@@ -94,12 +86,92 @@ def train(
             f"train_loss={train_loss:.4f} | val_loss={val_loss:.4f} | val_acc={val_acc:.4f}"
         )
 
-    # save final model
     model_path = os.path.join(output_dir, "roberta_single_task.pt")
     torch.save(model.state_dict(), model_path)
     print(f"Saved model to {model_path}")
 
     return model_path
 
+
+def run_predictions(
+    df,
+    model_path,
+    output_csv,
+    text_col="text",
+    label_col="Q_overall_binary",
+    batch_size=32,
+    max_length=128,
+):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    print("loading model")
+    # Load model + tokenizer
+    model, tokenizer = load_finetuned(
+        model_path="roberta_single_task.pt",
+        device=device
+    )
+    model.eval()
+    print("loading data")
+    # Dataset + DataLoader
+    dataset = HateSpeechDataset(
+        df,
+        tokenizer,
+        label_col=label_col,
+        max_length=max_length
+    )
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+    all_preds = []
+    all_probs = []
+    all_labels = []
+    print("starting preds")
+    for batch in loader:
+        batch = {k: v.to(device) for k, v in batch.items()}
+
+        outputs = model(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+        )
+
+        logits = outputs.logits
+        probs = torch.softmax(logits, dim=-1)
+
+        preds = torch.argmax(probs, dim=-1)
+
+        all_preds.extend(preds.cpu().tolist())
+        all_probs.extend(probs.cpu().tolist())
+        all_labels.extend(batch["labels"].cpu().tolist())
+
+    results_df = pd.DataFrame({
+        "Q_overall_true": all_labels,
+        "Q_overall_pred": all_preds,
+        "Q_overall_prob": [p[1] for p in all_probs],
+    })
+
+    results_df.to_csv(output_csv, index=False)
+    print(f"Saved predictions to {output_csv}")
+
 def main():
-    model = load_model()
+    data_path = "data/processed/dices_350_binary.csv"
+    df = pd.read_csv(data_path)
+
+    print("splitting train/test/validation...")
+    train_df, val_df = train_test_split(
+        df,
+        test_size=0.2,
+        random_state=67,
+        stratify=df["Q_overall_binary"],
+    )
+
+    print("calling training function...")
+    train(train_df=train_df,
+        val_df=val_df,
+        batch_size=64,
+        lr=2e-5,
+        epochs=3,
+        max_length=128,
+        output_dir="results",
+        )
+
+if __name__ == "__main__":
+    main()
