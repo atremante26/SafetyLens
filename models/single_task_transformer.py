@@ -2,6 +2,8 @@ import torch
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
+#https://huggingface.co/docs/transformers/en/model_doc/roberta
+
 MODEL_NAME = "roberta-base"
 NUM_LABELS = 2
 
@@ -17,9 +19,9 @@ class HateSpeechDataset(Dataset):
     Dataset for single-task classification with RoBERTa.
     Each item returns input_ids, attention_mask, and a single label.
     """
-    def __init__(self, dataframe, tokenizer, max_length=256):
+    def __init__(self, dataframe, tokenizer, label_col="Q_overall_binary", max_length=256):
         self.texts = dataframe["text"].values
-        self.labels = dataframe["label"].map(label2id).values  # map strings -> ids
+        self.labels = dataframe[label_col].astype(int).values
         self.tokenizer = tokenizer
         self.max_length = max_length
 
@@ -46,7 +48,7 @@ class HateSpeechDataset(Dataset):
 
 def load_model(model_name=MODEL_NAME, device="cuda"):
     """
-    Load a RoBERTa sequence classification model and tokenizer.
+    Load the RoBERTa model and tokenizer.
     """
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
@@ -61,5 +63,18 @@ def load_model(model_name=MODEL_NAME, device="cuda"):
     model.eval() 
 
     return model, tokenizer
-        
-print("hello world")
+
+def load_finetuned(model_path, device="cuda"):
+    """
+    Load the finetuned Roberta model and tokenizer
+    """
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+
+    model = AutoModelForSequenceClassification.from_pretrained(
+        MODEL_NAME,
+        num_labels=NUM_LABELS,
+        id2label=id2label,
+        label2id=label2id,
+    )
+
+    state = torch.load(model_path, map_location=device)
