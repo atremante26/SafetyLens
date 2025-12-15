@@ -4,7 +4,8 @@ import torch
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from models.multi_task_transformer import MultiTaskRoBERTa
 
 def ensure_dir(path: Path):
     path.mkdir(parents=True, exist_ok=True)
@@ -195,7 +196,6 @@ def run_shap_multi_task_transformer(
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     
     # Load the multi-task model architecture
-    from models import MultiTaskRoBERTa
     model = MultiTaskRoBERTa(
         model_name=model_name,
         tasks=ckpt["tasks"]

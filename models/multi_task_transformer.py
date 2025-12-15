@@ -3,7 +3,7 @@ import torch.nn as nn
 from transformers import RobertaModel, AutoTokenizer
 from torch.utils.data import Dataset
 
-
+# Configuration
 DEFAULT_TASKS = ["Q_overall", "Q2_harmful", "Q3_bias", "Q6_policy"]
 
 TASK_TO_COL = {
@@ -89,8 +89,8 @@ class MultiTaskDataset(Dataset):
 
         # Start with tokenized inputs
         item = {
-            "input_ids": enc["input_ids"].squeeze(0),         # [L]
-            "attention_mask": enc["attention_mask"].squeeze(0) # [L]
+            "input_ids": enc["input_ids"].squeeze(0),         
+            "attention_mask": enc["attention_mask"].squeeze(0) 
         }
 
         # Add labels for each task as float tensors
@@ -98,7 +98,7 @@ class MultiTaskDataset(Dataset):
             col = TASK_TO_COL[task]
             val = self.data.loc[idx, col]
 
-            # HDefensive check for NaN
+            # Defensive check for NaN
             if val != val:  
                 raise ValueError(f"NaN label found at idx={idx} task={task} col={col}")
 

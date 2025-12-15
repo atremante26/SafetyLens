@@ -1,13 +1,18 @@
 import os
+import sys
+import torch
 import argparse
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-
-import torch
+from pathlib import Path
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from models import MultiTaskRoBERTa, load_model
-from explainability import compute_integrated_gradients, top_k_tokens
+
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+from models.multi_task_transformer import MultiTaskRoBERTa, load_model
+from explainability.integrated_gradients import compute_integrated_gradients, top_k_tokens
+
 
 # CONFIG
 MAX_LEN = 128          
@@ -177,33 +182,31 @@ if __name__ == "__main__":
     main()
 
 """
-Multi-Task 2-Head
-python -m scripts.run_integrated_gradients \
-    --ckpt results/models/best_multitask_2.pt \
+python scripts/explainability/run_integrated_gradients.py \
+    --ckpt models/checkpoints/best_multitask_2.pt \
     --data_csv data/processed/dices_350_binary.csv \
     --model_type multitask \
-    --task Q2_harmful \
+    --task Q_overall \
     --n_examples 30 \
     --n_steps 50 \
-    --out_csv results/ig/ig_2task_q2.csv
+    --out_csv results/explainability/ig/ig_2task_q.csv
 
-Multi-Task 4-Head
-python -m scripts.run_integrated_gradients \
-    --ckpt results/models/best_multitask_4.pt \
+python scripts/explainability/run_integrated_gradients.py \
+    --ckpt models/checkpoints/best_multitask_4.pt \
     --data_csv data/processed/dices_350_binary.csv \
     --model_type multitask \
-    --task Q2_harmful \
+    --task Q_overall \
     --n_examples 30 \
     --n_steps 50 \
-    --out_csv results/ig/ig_4task_q2.csv
+    --out_csv results/explainability/ig/ig_4task_q.csv
 
-# Single-Task
-python -m scripts.run_integrated_gradients \
-    --ckpt results/models/best_singletask.pt \
+python scripts/explainability/run_integrated_gradients.py \
+    --ckpt models/checkpoints/best_singletask.pt \
     --data_csv data/processed/dices_350_binary.csv \
     --model_type singletask \
     --task Q_overall \
     --n_examples 30 \
-    --n_steps 25 \
-    --out_csv results/ig/ig_single_q.csv
+    --n_steps 50 \
+    --out_csv results/explainability/ig/ig_single_q.csv
+    
 """

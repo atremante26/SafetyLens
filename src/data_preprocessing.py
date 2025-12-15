@@ -166,7 +166,7 @@ def load_data_sklearn(
     X_test = vectorizer.transform(X_test_text)
 
     # Save vectorizer (REQUIRED for SHAP)
-    vec_filepath = 'results/models/tfidf_vectorizer.pkl'
+    vec_filepath = 'models/checkpoints/tfidf_vectorizer.pkl'
 
     with open(vec_filepath, "wb") as f:
         pickle.dump(vectorizer, f)

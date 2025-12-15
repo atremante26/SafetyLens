@@ -1,3 +1,5 @@
+import sys
+from pathlib import Path
 import argparse
 import random
 from typing import Dict, List, Tuple
@@ -10,13 +12,14 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
-
 from transformers import AutoTokenizer, get_linear_schedule_with_warmup
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score, average_precision_score
 )
 
-from models import MultiTaskRoBERTa, MultiTaskDataset
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+from models.multi_task_transformer import MultiTaskRoBERTa, MultiTaskDataset
 from src.data_preprocessing import load_multi_task_data
 
 # HYPERPARAMETERS 
@@ -306,15 +309,13 @@ if __name__ == "__main__":
     main()
 
 '''
-2 Task Example:
-python -m scripts.train_multitask \
-  --tasks 2 \
-  --ckpt_out results/models/best_multitask_2.pt \
-  --preds_out results/multi_task_transformer/test_predictions_2.csv
-
-4 Task Example:
-python -m scripts.train_multitask \
+python scripts/models/train_multitask.py \
   --tasks 4 \
-  --ckpt_out results/models/best_multitask_4.pt \
-  --preds_out results/multi_task_transformer/test_predictions_4.csv
+  --ckpt_out models/checkpoints/best_multitask_4.pt \
+  --preds_out results/predictions/multi_task_transformer/test_predictions_4.csv
+
+python scripts/models/train_multitask.py \
+  --tasks 2 \
+  --ckpt_out models/checkpoints/best_multitask_2.pt \
+  --preds_out results/predictions/multi_task_transformer/test_predictions_2.csv 
 '''

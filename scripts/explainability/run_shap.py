@@ -1,6 +1,10 @@
+import sys
 import argparse 
 from pathlib import Path 
 import pandas as pd 
+
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 from explainability.SHAP import( 
     run_shap_logistic_regression, 
     run_shap_single_task_transformer, 
@@ -10,14 +14,10 @@ from explainability.SHAP import(
 #CONFIG 
 MAX_LEN = 128 
 N_EXAMPLES = 25 
-# number of rows to run IG on 
 N_STEPS = 25 
-# IG integration steps 
 TOP_K = 12 
-# number of top tokens to save 
 SEED = 42 
 THRESH = 0.5 
-# for pred in predict_binary() 
 TASK_TO_LABEL_COL = {
     "Q_overall": "Q_overall_binary",
     "Q2_harmful": "Q2_harmful_binary",
@@ -31,7 +31,7 @@ def parse_args():
     p.add_argument("--ckpt", required=True, help="Path to model checkpoint (.pt)") 
     p.add_argument("--vectorizer", required=False, help="Path to logistic regression vectorizer") 
     p.add_argument("--data_csv", required=True, help="Processed dataset CSV") 
-    p.add_argument("--model_type", required=True, choices=["logreg", "multitask", "single_task"], help="Type of model checkpoint") 
+    p.add_argument("--model_type", required=True, choices=["logreg", "multitask", "singletask"], help="Type of model checkpoint") 
     p.add_argument("--task", required=True, choices=list(TASK_TO_LABEL_COL.keys())) 
     p.add_argument("--out_csv", required=True, help="Output CSV for IG results") 
     return p.parse_args() 
@@ -57,7 +57,7 @@ def main():
         )
         print(f"SHAP results saved to {args.out_csv}")
 
-    elif args.model_type == "single_task":
+    elif args.model_type == "singletask":
         run_shap_single_task_transformer(
             df=df_sample,
             text_col="text",
@@ -96,28 +96,28 @@ if __name__ == "__main__":
     
 """ 
 Multi-Task:
-python -m scripts.run_shap \
-    --ckpt results/models/best_multitask_4.pt \
+
+python scripts/explainability/run_shap.py \
+    --ckpt models/checkpoints/best_multitask_4.pt \
     --data_csv data/processed/dices_350_binary.csv \
     --model_type multitask \
-    --task Q2_harmful \
-    --out_csv results/shap/multi_shap_q2_harmful.csv
-    
-Single Task:
-python -m scripts.run_shap \
-    --ckpt results/models/best_singletask.pt \
-    --data_csv data/processed/dices_350_binary.csv \
-    --model_type single_task \
     --task Q_overall \
-    --out_csv results/shap/single_shap_q_overall.csv
+    --out_csv results/explainability/shap/multi_shap_q_overall.csv
 
-Logistic Regression:
-python -m scripts.run_shap \
-    --ckpt results/models/logistic_regression_model.pkl \
+python scripts/explainability/run_shap.py \
+    --ckpt models/checkpoints/best_singletask.pt \
     --data_csv data/processed/dices_350_binary.csv \
-    --vectorizer results/models/tfidf_vectorizer.pkl \
+    --model_type singletask \
+    --task Q_overall \
+    --out_csv results/explainability/shap/single_shap_q_overall.csv
+
+python scripts/explainability/run_shap.py \
+    --ckpt models/checkpoints/logistic_regression_model.pkl \
+    --data_csv data/processed/dices_350_binary.csv \
+    --vectorizer models/checkpoints/tfidf_vectorizer.pkl \
     --model_type logreg \
     --task Q_overall \
-    --out_csv results/shap/logreg_shap_q_overall.csv 
-    
+    --out_csv results/explainability/shap/logreg_shap_q_overall.csv
+   
+   
 """
