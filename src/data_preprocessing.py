@@ -246,7 +246,7 @@ if __name__ == '__main__':
     # Test sklearn loader
     print("Testing sklearn loader...")
     X_train, X_val, X_test, y_train, y_val, y_test = load_data_sklearn()
-    print(f"sklearn loader works: {len(X_train):,} train samples\n")
+    print(f"sklearn loader works: {X_train.shape[0]:,} train samples\n")
     
     # Test multi-task loader
     print("Testing multi-task loader...")
@@ -255,3 +255,7 @@ if __name__ == '__main__':
     print(f"  Train: {len(splits['train']):,} ratings")
     print(f"  Val: {len(splits['val']):,} ratings")
     print(f"  Test: {len(splits['test']):,} ratings")
+
+    """
+    python src/data_preprocessing.py
+    """

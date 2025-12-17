@@ -325,7 +325,18 @@ if __name__ == "__main__":
 
 '''
 Examples:
-    python scripts/explainability/run_lime.py --model_type singletask --checkpoint models/checkpoints/best_singletask.pt 
-    python scripts/explainability/run_lime.py --model_type multitask --checkpoint models/checkpoints/best_multitask_4.pt 
-    python scripts/explainability/run_lime.py --model_type logreg --checkpoint models/checkpoints/logistic_regression_model.pkl
+    python scripts/explainability/run_lime.py \
+        --model_type singletask \
+        --checkpoint models/checkpoints/best_singletask.pt \
+        --output_dir results/explainability/lime
+
+    python scripts/explainability/run_lime.py \
+        --model_type multitask \
+        --checkpoint models/checkpoints/best_multitask_4.pt \
+        --output_dir results/explainability/lime 
+
+    python scripts/explainability/run_lime.py \
+        --model_type logreg \
+        --checkpoint models/checkpoints/logistic_regression_model.pkl \
+        --output_dir results/explainability/lime 
 '''

@@ -46,9 +46,15 @@ FIGURES_DIR = RESULTS_DIR / 'figures'
 
 # HELPER FUNCTIONS
 def ensure_dir(path):
-    """Create directory if it doesn't exist."""
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    path = Path(path)
+    # If path has a file extension, get the parent directory
+    if path.suffix: 
+        directory = path.parent
+    else:
+        directory = path
+    
+    # Create directory if it doesn't exist
+    directory.mkdir(parents=True, exist_ok=True)
 
 def get_prediction_path(model_name, filename):
     """Get prediction file path for a given model."""

@@ -312,10 +312,10 @@ if __name__ == "__main__":
 python scripts/models/train_multitask.py \
   --tasks 4 \
   --ckpt_out models/checkpoints/best_multitask_4.pt \
-  --preds_out results/predictions/multi_task_transformer/test_predictions_4.csv
+  --preds_out results/predictions/multi_task_transformer/test_preds_4.csv
 
 python scripts/models/train_multitask.py \
   --tasks 2 \
   --ckpt_out models/checkpoints/best_multitask_2.pt \
-  --preds_out results/predictions/multi_task_transformer/test_predictions_2.csv 
+  --preds_out results/predictions/multi_task_transformer/test_preds_2.csv 
 '''

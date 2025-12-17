@@ -95,8 +95,6 @@ if __name__ == "__main__":
 
     
 """ 
-Multi-Task:
-
 python scripts/explainability/run_shap.py \
     --ckpt models/checkpoints/best_multitask_4.pt \
     --data_csv data/processed/dices_350_binary.csv \

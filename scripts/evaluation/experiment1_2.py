@@ -14,8 +14,8 @@ from src.utils.paths import PREDICTIONS_DIR, EVALUATION_DIR, ensure_dir
 DEFAULT_PATHS = {
     'logreg': PREDICTIONS_DIR / 'logistic_regression' / 'test_preds.csv',
     'single': PREDICTIONS_DIR / 'single_task_transformer' / 'test_preds.csv',
-    'multi2': PREDICTIONS_DIR / 'multi_task_transformer' / 'test_predictions_2.csv',
-    'multi4': PREDICTIONS_DIR / 'multi_task_transformer' / 'test_predictions_4.csv',
+    'multi2': PREDICTIONS_DIR / 'multi_task_transformer' / 'test_preds_2.csv',
+    'multi4': PREDICTIONS_DIR / 'multi_task_transformer' / 'test_preds_4.csv',
 }
 
 # Task configurations
@@ -221,9 +221,9 @@ def run_experiment_2(paths):
                 print(f"  Δ (2-head - 4-head): F1={f1_diff:+.3f}, PR-AUC={pr_diff:+.3f}")
                 
                 if f1_diff > 0:
-                    print(f"  → 2-head performs BETTER (negative transfer from imbalanced tasks)")
+                    print(f"  RESULT: 2-head performs BETTER (negative transfer from imbalanced tasks)")
                 else:
-                    print(f"  → 4-head performs BETTER (multi-task helps)")
+                    print(f"  RESULT: 4-head performs BETTER (multi-task helps)")
         
         return results_df
     else:
@@ -270,8 +270,8 @@ if __name__ == "__main__":
 
 """
 # Experiment 1: All models, all tasks
-python scripts/evaluation/compare_models.py --experiment 1
+python scripts/evaluation/experiment1_2.py --experiment 1
 
-# Experiment 2: Ablation study (2-head vs 4-head)
-python scripts/evaluation/compare_models.py --experiment 2
+# Experiment 2: Comparison study (2-head vs 4-head)
+python scripts/evaluation/experiment1_2.py --experiment 2
 """

@@ -1,0 +1,3 @@
+model,task,confidence_level,n_examples,mean_top_k_mass,std_top_k_mass,mean_entropy,std_entropy,mean_n_tokens,mean_pred_prob
+single_task,Q_overall,borderline,15,0.18034037996065633,2.872975021810196e-17,5.143297945590073,9.193520069792627e-16,254.0,0.4958541393280029
+single_task,Q_overall,high,15,0.48120196565516055,1.7237850130861175e-16,3.6585350779115156,4.596760034896314e-16,60.0,0.9827091693878174

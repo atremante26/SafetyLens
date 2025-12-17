@@ -1,212 +1,365 @@
-import os
 import sys
-import torch
+from pathlib import Path
 import argparse
+import random
+
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
-from pathlib import Path
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch
+from tqdm.auto import tqdm
+
+from captum.attr import IntegratedGradients
+from transformers import AutoTokenizer
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
-from models.multi_task_transformer import MultiTaskRoBERTa, load_model
-from explainability.integrated_gradients import compute_integrated_gradients, top_k_tokens
+
+from src.utils.paths import DICES_BINARY, IG_DIR, ensure_dir
+from models.single_task_transformer import load_finetuned
+from models.multi_task_transformer import load_model as load_finetuned_multitask
+
+# Configuration
+SEED = 67
+BASELINE_TOKEN = "[PAD]"  # Baseline for IG
 
 
-# CONFIG
-MAX_LEN = 128          
-TOP_K = 12             
-SEED = 42
-THRESH = 0.5        
-
-TASK_TO_LABEL_COL = {
-    "Q_overall": "Q_overall_binary",
-    "Q2_harmful": "Q2_harmful_binary",
-    "Q3_bias": "Q3_bias_binary",
-    "Q6_policy": "Q6_policy_binary",
-}
-
-# ARGUMENT PARSING
-def parse_args():
-    p = argparse.ArgumentParser()
-    p.add_argument("--ckpt", required=True, help="Path to model checkpoint (.pt)")
-    p.add_argument("--data_csv", required=True, help="Processed dataset CSV")
-    p.add_argument("--model_type", required=True, choices=["multitask", "singletask"], help="Type of model checkpoint")
-    p.add_argument("--task", required=True, choices=list(TASK_TO_LABEL_COL.keys()))
-    p.add_argument("--n_examples", type=int, default=30, help="Number of examples to analyze (default: 30)")
-    p.add_argument("--n_steps", type=int, default=50, help="IG integration steps for quality (default: 50, higher = better convergence)")
-    p.add_argument("--out_csv", required=True, help="Output CSV for IG results")
-    return p.parse_args()
-
-# UTILITIES
-def set_seed(seed: int):
+# UTILS
+def set_seed(seed=67):
+    random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
-def load_model(ckpt_path, model_type, device):
+
+def get_predictions(model, tokenizer, texts, device, task=None, batch_size=32):
     """
-    Load model and tokenizer from checkpoint
+    Get model predictions for selecting samples by confidence.
+    Uses batching to avoid memory issues on large datasets.
     """
-    # Load checkpoint
-    ckpt = torch.load(ckpt_path, map_location=device)
+    model.eval()
+    all_probs = []
     
-    # Detect checkpoint format by checking if it has model parameter keys
-    is_direct_state_dict = isinstance(ckpt, dict) and (
-        'roberta.embeddings.word_embeddings.weight' in ckpt or
-        'classifier.dense.weight' in ckpt
+    # Process in batches
+    for i in tqdm(range(0, len(texts), batch_size), desc="Getting predictions", leave=False):
+        batch_texts = texts[i:i + batch_size]
+        
+        # Tokenize batch
+        encoding = tokenizer(
+            batch_texts,
+            padding=True,
+            truncation=True,
+            max_length=256,
+            return_tensors="pt"
+        )
+        
+        input_ids = encoding['input_ids'].to(device)
+        attention_mask = encoding['attention_mask'].to(device)
+        
+        with torch.no_grad():
+            if task:  # Multi-task
+                outputs = model(input_ids, attention_mask)
+                logits = outputs[task].squeeze(-1)
+                probs = torch.sigmoid(logits)
+            else:  # Single-task
+                outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+                probs = torch.softmax(outputs.logits, dim=-1)[:, 1]  # P(unsafe)
+        
+        all_probs.extend(probs.cpu().numpy().tolist())
+    
+    return np.array(all_probs)
+
+
+def select_samples_by_confidence(df, model, tokenizer, device, n_samples, confidence_split, task=None):
+    """
+    Select samples based on prediction confidence.
+    """
+    # Get predictions for entire test set
+    texts = df['text'].tolist()
+    probs = get_predictions(model, tokenizer, texts, device, task)
+    df = df.copy()
+    df['pred_prob'] = probs
+    
+    if confidence_split == 'all':
+        # Random sample
+        selected = df.sample(n=min(n_samples, len(df)), random_state=SEED)
+        confidence_labels = ['all'] * len(selected)
+    
+    elif confidence_split == 'high':
+        # High-confidence unsafe (prob > 0.8)
+        high_conf = df[df['pred_prob'] > 0.8].nlargest(n_samples, 'pred_prob')
+        selected = high_conf
+        confidence_labels = ['high'] * len(selected)
+    
+    elif confidence_split == 'borderline':
+        # Borderline (0.45 <= prob <= 0.55)
+        df['distance_to_threshold'] = abs(df['pred_prob'] - 0.5)
+        borderline = df[
+            (df['pred_prob'] >= 0.45) & (df['pred_prob'] <= 0.55)
+        ].nsmallest(n_samples, 'distance_to_threshold')
+        selected = borderline
+        confidence_labels = ['borderline'] * len(selected)
+    
+    elif confidence_split == 'high_vs_borderline':
+        # Half high-confidence, half borderline
+        n_each = n_samples // 2
+        
+        # High-confidence
+        high_conf = df[df['pred_prob'] > 0.8].nlargest(n_each, 'pred_prob')
+        
+        # Borderline
+        df['distance_to_threshold'] = abs(df['pred_prob'] - 0.5)
+        borderline = df[
+            (df['pred_prob'] >= 0.45) & (df['pred_prob'] <= 0.55)
+        ].nsmallest(n_each, 'distance_to_threshold')
+        
+        # Combine
+        selected = pd.concat([high_conf, borderline])
+        confidence_labels = ['high'] * len(high_conf) + ['borderline'] * len(borderline)
+    
+    else:
+        raise ValueError(f"Unknown confidence_split: {confidence_split}")
+    
+    return selected.reset_index(drop=True), confidence_labels
+
+
+# INTEGRATED GRADIENTS
+def compute_ig_attributions(model, tokenizer, text, device, task=None, n_steps=50):
+    """
+    Compute Integrated Gradients attributions for a single text.
+    """
+    model.eval()
+    
+    # Tokenize
+    encoding = tokenizer(
+        text,
+        padding=False,
+        truncation=True,
+        max_length=256,
+        return_tensors="pt"
     )
     
-    if is_direct_state_dict:
-        # Partner's format: checkpoint IS the state_dict
-        state_dict = ckpt
-        model_name = "roberta-base"
-        tasks = None
-    else:
-        # Our format: checkpoint is a wrapper dict with metadata
-        model_name = ckpt.get("model_name", "roberta-base")
-        tasks = ckpt.get("tasks", None)
-        state_dict = ckpt.get("model_state_dict", ckpt.get("state_dict", ckpt))
+    input_ids = encoding['input_ids'].to(device)
+    attention_mask = encoding['attention_mask'].to(device)
     
-    # Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    # Get input embeddings
+    if task:  # Multi-task
+        embeddings = model.roberta.embeddings.word_embeddings(input_ids)
+    else:  # Single-task
+        embeddings = model.roberta.embeddings.word_embeddings(input_ids)
+    
+    # Create baseline (zero embeddings)
+    baseline_embeddings = torch.zeros_like(embeddings)
+    
+    def forward_func(embeddings, attn_mask):
+        outputs = model.roberta(inputs_embeds=embeddings, attention_mask=attn_mask)
+        seq = outputs.last_hidden_state 
 
-    # Initialize model architecture
-    if model_type == "multitask":
-        model = MultiTaskRoBERTa(
-            model_name=model_name,
-            tasks=tasks
-        ).to(device)
-    else:  # single_task
-        model = AutoModelForSequenceClassification.from_pretrained(
-            model_name,
-            num_labels=2,
-            id2label={0: "safe", 1: "unsafe"},
-            label2id={"safe": 0, "unsafe": 1}
-        ).to(device)
+        if task:  # multitask
+            cls = seq[:, 0, :]
+            logits = model.heads[task](model.dropout(cls)).squeeze(-1)  
+            return torch.sigmoid(logits).unsqueeze(-1) 
 
-    # Load trained weights (suppress HuggingFace warnings during load)
-    model.load_state_dict(state_dict)
-    model.eval()
+        else:  # single-task HF RobertaForSequenceClassification
+            logits = model.classifier(seq) 
+            if logits.shape[-1] == 2:
+                probs = torch.softmax(logits, dim=-1)[:, 1:2]
+            else:
+                probs = torch.sigmoid(logits)  
+            return probs
 
-    return model, tokenizer, model_name, tasks
+
+    # Initialize IG
+    ig = IntegratedGradients(forward_func)
+    
+    with torch.no_grad():
+        test_out = forward_func(embeddings, attention_mask)
+
+    # Compute attributions on embeddings
+    attributions, delta = ig.attribute(
+        inputs=embeddings,
+        baselines=baseline_embeddings,
+        additional_forward_args=(attention_mask,),
+        n_steps=n_steps,
+        return_convergence_delta=True
+    )
+    
+    # Sum attributions across embedding dimensions to get per-token attribution
+    token_attributions = (
+        attributions
+        .sum(dim=-1)
+        .squeeze(0)
+        .detach()
+        .cpu()
+        .numpy()
+    )
+
+    
+    # Get prediction
+    with torch.no_grad():
+        pred_prob = forward_func(embeddings, attention_mask).item()
+
+    # Convert to tokens
+    tokens = tokenizer.convert_ids_to_tokens(input_ids[0])
+    
+    return tokens, token_attributions, pred_prob, delta.item()
+
+
+def run_ig_analysis(
+    df,
+    model,
+    tokenizer,
+    device,
+    model_name,
+    task=None,
+    n_steps=50,
+    confidence_labels=None
+):
+    """
+    Run IG analysis on all samples in dataframe.
+    """
+    results = []
+    
+    for idx, row in tqdm(df.iterrows(), total=len(df), desc="Computing IG"):
+        text = row['text']
+        true_label = row.get('Q_overall_binary', None)
+        confidence_level = confidence_labels[idx] if confidence_labels else 'all'
+        
+        # Compute IG
+        tokens, attributions, pred_prob, convergence_delta = compute_ig_attributions(
+            model, tokenizer, text, device, task, n_steps
+        )
+        
+        # Store results for each token
+        for token, attr in zip(tokens, attributions):
+            # Skip special tokens in output
+            if token in ['[CLS]', '[SEP]', '[PAD]', '<s>', '</s>']:
+                continue
+            
+            results.append({
+                'model': model_name,
+                'task': task if task else 'Q_overall',
+                'example_idx': idx,
+                'confidence_level': confidence_level,
+                'true_label': true_label,
+                'pred_prob': pred_prob,
+                'convergence_delta': convergence_delta,
+                'token': token,
+                'attribution': attr,
+                'abs_attribution': abs(attr),
+            })
+    
+    return pd.DataFrame(results)
+
 
 # MAIN
+def parse_args():
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument('--checkpoint', type=str, required=True, help="Path to model checkpoint")
+    parser.add_argument('--model_type', type=str, required=True, choices=['singletask', 'multitask'])
+    parser.add_argument('--task', type=str, default='Q_overall', help="Task name (for multi-task)")
+    parser.add_argument('--data', type=str, help="Path to dataset CSV")
+    parser.add_argument('--output_dir', type=str, help="Output directory")
+    
+    # Sampling configuration
+    parser.add_argument('--n_samples', type=int, default=30, help="Number of samples to explain")
+    parser.add_argument(
+        '--confidence_split',
+        type=str,
+        default='all',
+        choices=['all', 'high', 'borderline', 'high_vs_borderline'],
+        help="How to select samples by confidence"
+    )
+    
+    # IG configuration
+    parser.add_argument('--n_steps', type=int, default=50, help="Number of IG steps")
+    parser.add_argument('--seed', type=int, default=67, help="Random seed")
+    
+    return parser.parse_args()
+
+
 def main():
     args = parse_args()
-    set_seed(SEED)
-
+    set_seed(args.seed)
+    
+    # Setup
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("Device:", device)
-
-    # Load Model
-    model, tokenizer, model_name, tasks = load_model(args.ckpt, args.model_type, device)
-    print("Model:", model_name)
-    print("Model type:", args.model_type)
-    print("Tasks in ckpt:", tasks)
-
-    # Validate task exists for multitask models
-    if args.model_type == "multitask" and args.task not in (tasks or []):
-        raise ValueError(f"Task {args.task} not found in checkpoint tasks {tasks}")
-
-    # Load and Filter Data
-    df = pd.read_csv(args.data_csv)
-    if "text" not in df.columns:
-        raise ValueError("Input CSV must contain a `text` column")
-
-    label_col = TASK_TO_LABEL_COL[args.task]
-    if label_col not in df.columns:
-        raise ValueError(f"Input CSV missing label column: {label_col}")
-
-    # Clean Data
-    df = df.dropna(subset=["text"]).reset_index(drop=True)
-    df = df[df[label_col].isin([0, 1])].reset_index(drop=True)
-
-    if len(df) == 0:
-        raise ValueError("No valid rows after filtering (need label in {0,1} and non-null text).")
-
-    # Sample Examples
-    df_sample = df.sample(n=min(args.n_examples, len(df)), random_state=SEED).reset_index(drop=True)
-    print(f"Running IG on {len(df_sample)} examples (task={args.task})")
-
-    # Run Integrated Gradients
-    rows = []
-    for i in tqdm(range(len(df_sample)), desc="Integrated Gradients"):
-        # Extract text and ground truth label
-        text = str(df_sample.loc[i, "text"])
-        y_true = int(df_sample.loc[i, label_col])
-
-        # Compute IG attributions for this example
-        res = compute_integrated_gradients(
-            text=text,
-            model=model,
-            tokenizer=tokenizer,
-            model_type=args.model_type,
-            task=(args.task if args.model_type == "multitask" else None),
-            device=str(device),
-            max_length=MAX_LEN,
-            n_steps=args.n_steps,
-        )
-
-        # Extract top-k most influential tokens
-        top = top_k_tokens(res["tokens"], res["attributions"], k=TOP_K)
-
-        # Build output row with prediction info
-        out = {
-            "task": args.task,
-            "true_label": y_true,
-            "prob_pos": res["prob"],
-            "pred": res["pred"],
-            "logit": res["logit"],
-            "convergence_delta": res["convergence_delta"],
-            "text": text,
-        }
-
-        # Add top-k tokens and their attributions as separate columns
-        for j, (tok, val) in enumerate(top, start=1):
-            out[f"tok_{j}"] = tok
-            out[f"attr_{j}"] = val
-
-        rows.append(out)
-
-    out_df = pd.DataFrame(rows)
-
-    # Save Results
-    os.makedirs(os.path.dirname(args.out_csv) or ".", exist_ok=True)
-    out_df.to_csv(args.out_csv, index=False)
-    print("Saved:", args.out_csv)
+    print(f"Device: {device}")
+    
+    data_path = Path(args.data) if args.data else DICES_BINARY
+    output_dir = Path(args.output_dir) if args.output_dir else IG_DIR
+    ensure_dir(output_dir)
+    
+    # Load data
+    print(f"\nLoading data from: {data_path}")
+    df = pd.read_csv(data_path)
+    print(f"Loaded {len(df)} samples")
+    
+    # Load model
+    print(f"\nLoading {args.model_type} model...")
+    if args.model_type == 'singletask':
+        model, tokenizer = load_finetuned(args.checkpoint, device=str(device))
+        model_name = 'single_task'
+        task = None
+    else:
+        model, tokenizer = load_finetuned_multitask(args.checkpoint, device=str(device))
+        model_name = 'multi_task'
+        task = args.task
+    
+    # Select samples by confidence
+    selected_df, confidence_labels = select_samples_by_confidence(
+        df, model, tokenizer, device, args.n_samples, args.confidence_split, task
+    )
+    
+    # Run IG analysis
+    print(f"\nRunning Integrated Gradients (n_steps={args.n_steps})...")
+    results_df = run_ig_analysis(
+        selected_df,
+        model,
+        tokenizer,
+        device,
+        model_name,
+        task=task,
+        n_steps=args.n_steps,
+        confidence_labels=confidence_labels
+    )
+    
+    # Save results
+    results_df.to_csv(output_dir, index=False)
+    print(f"\nSaved IG results: {output_dir}")
 
 
 if __name__ == "__main__":
     main()
-
 """
+Usage:
+NORMAL:
 python scripts/explainability/run_integrated_gradients.py \
-    --ckpt models/checkpoints/best_multitask_2.pt \
-    --data_csv data/processed/dices_350_binary.csv \
-    --model_type multitask \
-    --task Q_overall \
-    --n_examples 30 \
-    --n_steps 50 \
-    --out_csv results/explainability/ig/ig_2task_q.csv
-
-python scripts/explainability/run_integrated_gradients.py \
-    --ckpt models/checkpoints/best_multitask_4.pt \
-    --data_csv data/processed/dices_350_binary.csv \
-    --model_type multitask \
-    --task Q_overall \
-    --n_examples 30 \
-    --n_steps 50 \
-    --out_csv results/explainability/ig/ig_4task_q.csv
-
-python scripts/explainability/run_integrated_gradients.py \
-    --ckpt models/checkpoints/best_singletask.pt \
-    --data_csv data/processed/dices_350_binary.csv \
+    --checkpoint models/checkpoints/best_singletask.pt \
     --model_type singletask \
     --task Q_overall \
-    --n_examples 30 \
+    --n_samples 10
+    --output_dir results/explainability/ig/ig_single_q.csv
+
+#EXPERIMENT 3:
+# Single-task on Q_overall
+python scripts/explainability/run_integrated_gradients.py \
+    --checkpoint models/checkpoints/best_singletask.pt \
+    --model_type singletask \
+    --task Q_overall \
+    --n_samples 30 \
+    --confidence_split high_vs_borderline \
     --n_steps 50 \
-    --out_csv results/explainability/ig/ig_single_q.csv
-    
+    --output_dir results/evaluation/experiment3/experiment3_single.csv
+
+# Multi-task-4 on Q_overall  
+python scripts/explainability/run_integrated_gradients.py \
+    --checkpoint models/checkpoints/best_multitask_4.pt \
+    --model_type multitask \
+    --task Q_overall \
+    --n_samples 30 \
+    --confidence_split high_vs_borderline \
+    --n_steps 50 \
+    --output_dir results/evaluation/experiment3/experiment3_multi4.csv
 """
