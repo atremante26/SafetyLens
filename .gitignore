@@ -48,6 +48,7 @@ data/processed/*
 !data/processed/.gitkeep
 !data/processed/README.md
 !data/processed/*.csv
+!data/processed/*.png
 
 # ============================================================================
 # Models & Checkpoints
