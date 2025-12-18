@@ -1,5 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import toast, { Toaster } from 'react-hot-toast'
 import './App.css'
+import InputStage from './components/InputStage'
+import ModelStage from './components/ModelStage'
+import PredictionStage from './components/PredictionStage'
+import ExplainStage from './components/ExplainStage'
 
 function App() {
   const [text, setText] = useState('')
@@ -8,15 +13,27 @@ function App() {
   const [prediction, setPrediction] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   
-  // Explainability state
   const [selectedMethod, setSelectedMethod] = useState('lime')
   const [explanation, setExplanation] = useState(null)
   const [isExplaining, setIsExplaining] = useState(false)
 
+  // Keyboard shortcut: Ctrl+Enter to predict
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && text && !isLoading) {
+        handlePredict()
+      }
+    }
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [text, isLoading])
+
   const handlePredict = async () => {
     setIsLoading(true)
     setPrediction(null)
-    setExplanation(null) // Clear old explanation
+    setExplanation(null)
+    
+    const loadingToast = toast.loading('Analyzing safety...')
     
     try {
       const response = await fetch('http://localhost:8000/api/predict', {
@@ -28,11 +45,23 @@ function App() {
           task: selectedTask
         })
       })
+      
+      if (!response.ok) {
+        throw new Error(`Prediction failed: ${response.statusText}`)
+      }
+      
       const data = await response.json()
       setPrediction(data)
+      
+      toast.success(`Prediction complete: ${data.label}`, {
+        id: loadingToast,
+        icon: data.label === 'Safe' ? '◉' : '◈'
+      })
     } catch (error) {
       console.error('Prediction failed:', error)
-      alert('Prediction failed. Is the backend running?')
+      toast.error('Prediction failed. Check if backend is running.', {
+        id: loadingToast,
+      })
     } finally {
       setIsLoading(false)
     }
@@ -40,11 +69,13 @@ function App() {
 
   const handleExplain = async () => {
     if (!prediction) {
-      alert('Please run a prediction first!')
+      toast.error('Please run a prediction first!')
       return
     }
 
     setIsExplaining(true)
+    
+    const loadingToast = toast.loading('Computing attributions...')
     
     try {
       const response = await fetch('http://localhost:8000/api/explain', {
@@ -58,226 +89,129 @@ function App() {
           num_features: 10
         })
       })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Explanation failed')
+      }
+      
       const data = await response.json()
       setExplanation(data)
+      
+      toast.success(`${data.method.toUpperCase()} explanation generated!`, {
+        id: loadingToast,
+        icon: '⚙'
+      })
     } catch (error) {
       console.error('Explanation failed:', error)
-      alert('Explanation failed: ' + error.message)
+      toast.error(error.message || 'Explanation failed', {
+        id: loadingToast,
+      })
     } finally {
       setIsExplaining(false)
     }
   }
 
-  // Determine which methods are available for selected model
-  const getAvailableMethods = () => {
-    if (selectedModel === 'logreg') {
-      return ['lime', 'shap']
-    } else {
-      return ['lime', 'ig']
-    }
-  }
+  const copyResults = () => {
+    if (!prediction) return
 
-  const availableMethods = getAvailableMethods()
+    const resultText = `SafetyLens Analysis
+Model: ${prediction.model}
+Prediction: ${prediction.label}
+Confidence: ${(prediction.probability * 100).toFixed(1)}%
 
-  // Auto-select valid method when model changes
-  const handleModelChange = (model) => {
-    setSelectedModel(model)
-    const available = model === 'logreg' ? ['lime', 'shap'] : ['lime', 'ig']
-    if (!available.includes(selectedMethod)) {
-      setSelectedMethod('lime')
-    }
+Input Text:
+${text}
+${explanation ? `
+
+Explanation (${explanation.method.toUpperCase()}):
+${explanation.tokens.map((t, i) => `${i + 1}. ${t.token}: ${t.attribution.toFixed(3)}`).join('\n')}` : ''}`
+
+    navigator.clipboard.writeText(resultText)
+    toast.success('Results copied to clipboard!', {
+      icon: '⎘'
+    })
   }
 
   return (
     <div className="app">
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#1a1a1a',
+            color: '#e0e0e0',
+            border: '1px solid #333',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#1a1a1a',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#1a1a1a',
+            },
+          },
+        }}
+      />
+
       <header>
-        <h1>🔍 SafetyLens</h1>
-        <p>Content Safety Detection Pipeline</p>
-      </header>
+      <div className="header-content">
+        <h1>
+          <span className="logo-icon">◆</span>
+          SafetyLens
+        </h1>
+        <p>Multi-Model Content Safety Detection with Explainable AI</p>
+      </div>
+      
+      <div className="header-actions">
+        {(prediction || explanation) && (
+          <button className="copy-button" onClick={copyResults}>
+            <span className="button-icon">⎘</span>
+            Copy Results
+          </button>
+        )}
+        <span className="keyboard-hint">
+          <span className="hint-icon">⌘</span>
+          Press Ctrl+Enter to predict
+        </span>
+      </div>
+    </header>
 
       <div className="pipeline">
-        {/* Stage 1: Input */}
-        <div className="stage">
-          <h2>1. Input Text</h2>
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Enter a conversation to analyze...&#10;&#10;Example:&#10;USER: Can you help me with something dangerous?&#10;ASSISTANT: I cannot assist with that request."
-            rows={8}
-          />
-        </div>
-
-        {/* Stage 2: Model Selection */}
-        <div className="stage">
-          <h2>2. Select Model</h2>
-          <div className="model-options">
-            <label>
-              <input
-                type="radio"
-                value="logreg"
-                checked={selectedModel === 'logreg'}
-                onChange={(e) => handleModelChange(e.target.value)}
-              />
-              Logistic Regression
-            </label>
-            <label>
-              <input
-                type="radio"
-                value="singletask"
-                checked={selectedModel === 'singletask'}
-                onChange={(e) => handleModelChange(e.target.value)}
-              />
-              Single-Task RoBERTa
-            </label>
-            <label>
-              <input
-                type="radio"
-                value="multi2"
-                checked={selectedModel === 'multi2'}
-                onChange={(e) => handleModelChange(e.target.value)}
-              />
-              Multi-Task (2 heads)
-            </label>
-            <label>
-              <input
-                type="radio"
-                value="multi4"
-                checked={selectedModel === 'multi4'}
-                onChange={(e) => handleModelChange(e.target.value)}
-              />
-              Multi-Task (4 heads)
-            </label>
-          </div>
-
-          {(selectedModel === 'multi2' || selectedModel === 'multi4') && (
-            <div className="task-selector">
-              <label>Task:</label>
-              <select value={selectedTask} onChange={(e) => setSelectedTask(e.target.value)}>
-                <option value="Q_overall">Overall Safety</option>
-                <option value="Q2_harmful">Harmful Content</option>
-                {selectedModel === 'multi4' && (
-                  <>
-                    <option value="Q3_bias">Bias</option>
-                    <option value="Q6_policy">Policy Violation</option>
-                  </>
-                )}
-              </select>
-            </div>
-          )}
-
-          <button 
-            onClick={handlePredict} 
-            disabled={!text || isLoading}
-            className="predict-button"
-          >
-            {isLoading ? 'Analyzing...' : 'Predict Safety →'}
-          </button>
-        </div>
-
-        {/* Stage 3: Prediction Result */}
-        <div className="stage">
-          <h2>3. Prediction</h2>
-          {prediction ? (
-            <div className={`result ${prediction.label.toLowerCase()}`}>
-              <div className="label">{prediction.label}</div>
-              <div className="confidence">
-                Confidence: {(prediction.probability * 100).toFixed(1)}%
-              </div>
-              <div className="progress-bar">
-                <div 
-                  className="progress-fill"
-                  style={{ width: `${prediction.probability * 100}%` }}
-                />
-              </div>
-              <div className="model-info">Model: {prediction.model}</div>
-            </div>
-          ) : (
-            <div className="placeholder">
-              Run prediction to see results
-            </div>
-          )}
-        </div>
-
-        {/* Stage 4: Explainability */}
-        <div className="stage">
-          <h2>4. Explainability</h2>
-          
-          {prediction ? (
-            <>
-              <div className="explain-methods">
-                <label>Method:</label>
-                <div className="method-options">
-                  {availableMethods.includes('lime') && (
-                    <label>
-                      <input
-                        type="radio"
-                        value="lime"
-                        checked={selectedMethod === 'lime'}
-                        onChange={(e) => setSelectedMethod(e.target.value)}
-                      />
-                      LIME
-                    </label>
-                  )}
-                  {availableMethods.includes('shap') && (
-                    <label>
-                      <input
-                        type="radio"
-                        value="shap"
-                        checked={selectedMethod === 'shap'}
-                        onChange={(e) => setSelectedMethod(e.target.value)}
-                      />
-                      SHAP
-                    </label>
-                  )}
-                  {availableMethods.includes('ig') && (
-                    <label>
-                      <input
-                        type="radio"
-                        value="ig"
-                        checked={selectedMethod === 'ig'}
-                        onChange={(e) => setSelectedMethod(e.target.value)}
-                      />
-                      Integrated Gradients
-                    </label>
-                  )}
-                </div>
-              </div>
-
-              <button 
-                onClick={handleExplain}
-                disabled={isExplaining}
-                className="explain-button"
-              >
-                {isExplaining ? 'Explaining...' : 'Explain →'}
-              </button>
-
-              {explanation && (
-                <div className="explanation-results">
-                  <div className="method-label">
-                    {explanation.method.toUpperCase()} - Top Contributing Tokens
-                  </div>
-                  <div className="tokens">
-                    {explanation.tokens.map((item, idx) => (
-                      <div 
-                        key={idx} 
-                        className={`token-item ${item.attribution > 0 ? 'positive' : 'negative'}`}
-                      >
-                        <span className="token">{item.token}</span>
-                        <span className="attribution">
-                          {item.attribution > 0 ? '+' : ''}{item.attribution.toFixed(3)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="placeholder">
-              Run prediction first to enable explainability
-            </div>
-          )}
-        </div>
+        <InputStage 
+          text={text}
+          setText={setText}
+        />
+        
+        <ModelStage
+          selectedModel={selectedModel}
+          setSelectedModel={setSelectedModel}
+          selectedTask={selectedTask}
+          setSelectedTask={setSelectedTask}
+          text={text}
+          isLoading={isLoading}
+          onPredict={handlePredict}
+        />
+        
+        <PredictionStage
+          prediction={prediction}
+          isLoading={isLoading}
+        />
+        
+        <ExplainStage
+          prediction={prediction}
+          selectedModel={selectedModel}
+          selectedMethod={selectedMethod}
+          setSelectedMethod={setSelectedMethod}
+          explanation={explanation}
+          isExplaining={isExplaining}
+          onExplain={handleExplain}
+        />
       </div>
     </div>
   )
