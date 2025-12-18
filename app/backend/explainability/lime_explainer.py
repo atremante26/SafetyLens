@@ -33,15 +33,26 @@ class LIMEExplainer:
             for token, weight in weights
         ]
     
-    def explain_transformer(self, text, model, tokenizer, num_features=10, num_samples=500):
+    def explain_transformer(self, text, model, tokenizer, num_features=10, num_samples=500, task='Q_overall'):
         """
         Explain transformer prediction (single-task or multi-task)
+        
+        Args:
+            text: Input text
+            model: Model instance
+            tokenizer: Tokenizer instance
+            num_features: Number of features to explain
+            num_samples: Number of samples for LIME
+            task: Task name (for multi-task models)
         
         Returns: List of (token, attribution) tuples
         """
         import torch
         
         device = next(model.parameters()).device
+        
+        # Check if this is a multi-task model
+        is_multitask = hasattr(model, 'heads')
         
         def predict_proba(texts):
             results = []
@@ -50,24 +61,28 @@ class LIMEExplainer:
                     t,
                     return_tensors="pt",
                     truncation=True,
-                    max_length=512,
-                    padding=True
+                    max_length=256 if is_multitask else 512,
+                    padding='max_length' if is_multitask else True
                 ).to(device)
                 
                 with torch.no_grad():
-                    # Handle different model types
-                    if hasattr(model, 'roberta'):  # RobertaForSequenceClassification
+                    if is_multitask:
+                        # Multi-task model returns dict of logits
+                        logits_dict = model(
+                            input_ids=inputs['input_ids'],
+                            attention_mask=inputs['attention_mask']
+                        )
+                        
+                        # Get logit for specified task
+                        logit = logits_dict[task]  # Shape: (batch_size, 1)
+                        prob_unsafe = torch.sigmoid(logit).squeeze().item()
+                        probs = torch.tensor([[1 - prob_unsafe, prob_unsafe]])
+                    else:
+                        # Single-task model (RobertaForSequenceClassification)
                         outputs = model(**inputs)
                         probs = torch.softmax(outputs.logits, dim=1)
-                    else:  # Multi-task model
-                        logits_dict = model(**inputs)
-                        # Use first task for explanation
-                        task = list(logits_dict.keys())[0]
-                        logit = logits_dict[task]
-                        prob_unsafe = torch.sigmoid(logit).item()
-                        probs = torch.tensor([[1 - prob_unsafe, prob_unsafe]])
                 
-                results.append(probs[0].cpu().numpy())
+                    results.append(probs[0].cpu().numpy())
             
             return np.array(results)
         

@@ -57,7 +57,8 @@ async def explain(request: ExplainRequest):
         print(f"   Method: {request.method}")
         print(f"   Text length: {len(request.text)} chars")
         
-        # Route based on method and model
+        # Around line 70-95, replace the LIME section:
+
         if request.method == "lime":
             explainer = LIMEExplainer()
             
@@ -75,7 +76,8 @@ async def explain(request: ExplainRequest):
                     model_loader.singletask_model,
                     model_loader.singletask_tokenizer,
                     num_features=request.num_features,
-                    num_samples=request.n_samples
+                    num_samples=request.n_samples,
+                    task=None  # Single-task doesn't need task parameter
                 )
             elif request.model == "multi2":
                 tokens = explainer.explain_transformer(
@@ -83,7 +85,8 @@ async def explain(request: ExplainRequest):
                     model_loader.multitask_2_model,
                     model_loader.multitask_2_tokenizer,
                     num_features=request.num_features,
-                    num_samples=request.n_samples
+                    num_samples=request.n_samples,
+                    task=request.task  # Pass task parameter for multi-task
                 )
             elif request.model == "multi4":
                 tokens = explainer.explain_transformer(
@@ -91,7 +94,8 @@ async def explain(request: ExplainRequest):
                     model_loader.multitask_4_model,
                     model_loader.multitask_4_tokenizer,
                     num_features=request.num_features,
-                    num_samples=request.n_samples
+                    num_samples=request.n_samples,
+                    task=request.task  # Pass task parameter for multi-task
                 )
             else:
                 raise HTTPException(status_code=400, detail=f"Unknown model: {request.model}")
@@ -119,21 +123,24 @@ async def explain(request: ExplainRequest):
                     request.text,
                     model_loader.singletask_model,
                     model_loader.singletask_tokenizer,
-                    n_steps=request.n_steps
+                    n_steps=request.n_steps,
+                    task=None
                 )
             elif request.model == "multi2":
                 tokens = explainer.explain_transformer(
                     request.text,
                     model_loader.multitask_2_model,
                     model_loader.multitask_2_tokenizer,
-                    n_steps=request.n_steps
+                    n_steps=request.n_steps,
+                    task=request.task
                 )
             elif request.model == "multi4":
                 tokens = explainer.explain_transformer(
                     request.text,
                     model_loader.multitask_4_model,
                     model_loader.multitask_4_tokenizer,
-                    n_steps=request.n_steps
+                    n_steps=request.n_steps,
+                    task=request.task
                 )
             else:
                 raise HTTPException(status_code=400, detail=f"Unknown model: {request.model}")
