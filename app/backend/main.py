@@ -1,49 +1,52 @@
-"""
-SafetyLens FastAPI Backend
-Main application entry point with CORS enabled.
-"""
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import logging
 
-# Use relative imports (note the dots)
-from .api.predict import router as predict_router, set_model_loader
-from .api.explain import router as explain_router
-from .api.explain import set_model_loader as set_explain_model_loader
+from .api.predict import router as predict_router, set_model_loader as set_predict_loader
+from .api.explain import router as explain_router, set_model_loader as set_explain_loader
 from .models.loader import ModelLoader
 
-# Global model loader instance
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Global model loader
 model_loader = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Startup: Load all models into memory
-    Shutdown: Clean up resources
+    Application lifespan manager
+    Handles startup (model loading) and shutdown
     """
     global model_loader
     
-    print("🚀 Starting SafetyLens API...")
-    print("📦 Loading models...")
+    logger.info("Starting SafetyLens API...")
+    logger.info("Loading models...")
     
-    model_loader = ModelLoader()
-    model_loader.load_all_models()
-    
-    # Inject model loader into API routes
-    set_model_loader(model_loader)
-    set_explain_model_loader(model_loader) 
-    
-    print("✅ All models loaded successfully!")
-    
-    yield
-    
-    print("🛑 Shutting down SafetyLens API...")
+    try:
+        model_loader = ModelLoader()
+        model_loader.load_all_models()
+        
+        # Inject model loader into API routes
+        set_predict_loader(model_loader)
+        set_explain_loader(model_loader)
+        
+        logger.info("All models loaded successfully!")
+        
+        yield
+        
+    finally:
+        logger.info("Shutting down SafetyLens API...")
 
 # Create FastAPI app
 app = FastAPI(
     title="SafetyLens API",
-    description="Content safety detection with explainability",
+    description="Multi-model content safety detection with explainability",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -51,7 +54,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite dev server
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,19 +64,19 @@ app.add_middleware(
 app.include_router(predict_router, prefix="/api", tags=["Prediction"])
 app.include_router(explain_router, prefix="/api", tags=["Explainability"])
 
-# Root endpoint
 @app.get("/")
 async def root():
-    """Health check endpoint"""
+    """Root endpoint - API status"""
     return {
         "message": "SafetyLens API is running",
         "version": "1.0.0",
+        "status": "ok",
         "models_loaded": model_loader is not None
     }
 
 @app.get("/api/health")
 async def health():
-    """Detailed health check"""
+    """Health check endpoint - detailed model status"""
     if model_loader is None:
         return {"status": "error", "message": "Models not loaded"}
     
