@@ -4,7 +4,7 @@ function About() {
       <div className="about-header">
         <h1>
           <span className="logo-icon">◆</span>
-          About SafetyLens
+          About
         </h1>
         <p className="subtitle">Multi-Model Content Safety Detection Research</p>
       </div>
@@ -20,7 +20,7 @@ function About() {
             the tradeoffs between model complexity, performance, and interpretability.
           </p>
           <p>
-            This project was completed as part of [Course Name] at Amherst College in Fall 2024.
+            This project was completed as part of COSC-243 - Natural Language Processing at Amherst College in Fall 2025.
           </p>
         </section>
 
@@ -29,23 +29,33 @@ function About() {
           <h2>Research Questions</h2>
           <div className="research-questions">
             <div className="question-card">
-              <span className="question-number">H1</span>
-              <p>Does model architecture complexity correlate with performance?</p>
+              <span className="question-number">1</span>
+              <p>Can transformers outperform traditional baselines for multidimensional safety detection?</p>
             </div>
             <div className="question-card">
-              <span className="question-number">H2</span>
-              <p>Do multi-task models outperform single-task variants?</p>
+              <span className="question-number">2</span>
+              <p>Does multi-task learning improve performance across safety dimensions?</p>
             </div>
             <div className="question-card">
-              <span className="question-number">H3</span>
-              <p>How do different explainability methods compare?</p>
+              <span className="question-number">3</span>
+              <p>How do models reason differently about high-confidence vs. uncertain predictions?</p>
             </div>
           </div>
         </section>
 
         {/* Dataset */}
         <section className="about-section">
-          <h2>Dataset: DICES-350</h2>
+          <h2>
+            Dataset: 
+            <a 
+              href="https://github.com/google-research-datasets/dices-dataset" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="dataset-link"
+            >
+              DICES-350
+            </a>
+          </h2>
           <p>
             We used the DICES-350 dataset, which contains 350 conversations annotated 
             across multiple safety dimensions including overall safety, harmful content, 
@@ -67,6 +77,7 @@ function About() {
           </div>
         </section>
 
+
         {/* Model Performance */}
         <section className="about-section">
           <h2>Model Performance</h2>
@@ -87,7 +98,7 @@ function About() {
                   <td>0.422</td>
                   <td>Fast baseline</td>
                 </tr>
-                <tr className="best-model">
+                <tr>
                   <td>Single-Task RoBERTa</td>
                   <td>Binary Classifier</td>
                   <td>0.543</td>
@@ -115,7 +126,7 @@ function About() {
           <h2>Key Findings</h2>
           <div className="findings-grid">
             <div className="finding-card">
-              <div className="finding-icon">📊</div>
+              <div className="finding-icon">◈</div>
               <h3>Model Complexity ≠ Performance</h3>
               <p>
                 Single-task RoBERTa outperformed multi-task variants, suggesting 
@@ -123,15 +134,15 @@ function About() {
               </p>
             </div>
             <div className="finding-card">
-              <div className="finding-icon">⚖️</div>
+              <div className="finding-icon">⊙</div>
               <h3>Class Imbalance Matters</h3>
               <p>
-                Severe class imbalance (9% unsafe) hurt multi-task model 
+                Severe class imbalance hurt multi-task model 
                 convergence and generalization.
               </p>
             </div>
             <div className="finding-card">
-              <div className="finding-icon">🔍</div>
+              <div className="finding-icon">⚙</div>
               <h3>Explainability Insights</h3>
               <p>
                 LIME, SHAP, and Integrated Gradients provide complementary 
@@ -146,7 +157,7 @@ function About() {
           <h2>Downloads</h2>
           <div className="downloads-grid">
             <a href="/paper.pdf" className="download-card" download>
-              <div className="download-icon">📄</div>
+              <div className="download-icon">▣</div>
               <div className="download-info">
                 <h3>Research Paper</h3>
                 <p>Full technical report (PDF)</p>
@@ -154,7 +165,7 @@ function About() {
               <span className="download-arrow">→</span>
             </a>
             <a href="/poster.pdf" className="download-card" download>
-              <div className="download-icon">📊</div>
+              <div className="download-icon">▦</div>
               <div className="download-info">
                 <h3>Research Poster</h3>
                 <p>Conference-style poster (PDF)</p>
@@ -164,52 +175,18 @@ function About() {
           </div>
         </section>
 
-        {/* Tech Stack */}
-        <section className="about-section">
-          <h2>Technology Stack</h2>
-          <div className="tech-stack">
-            <div className="tech-category">
-              <h3>Machine Learning</h3>
-              <div className="tech-tags">
-                <span className="tech-tag">PyTorch</span>
-                <span className="tech-tag">Transformers</span>
-                <span className="tech-tag">scikit-learn</span>
-                <span className="tech-tag">RoBERTa</span>
-              </div>
-            </div>
-            <div className="tech-category">
-              <h3>Explainability</h3>
-              <div className="tech-tags">
-                <span className="tech-tag">LIME</span>
-                <span className="tech-tag">SHAP</span>
-                <span className="tech-tag">Captum (IG)</span>
-              </div>
-            </div>
-            <div className="tech-category">
-              <h3>Web Development</h3>
-              <div className="tech-tags">
-                <span className="tech-tag">React</span>
-                <span className="tech-tag">FastAPI</span>
-                <span className="tech-tag">Vite</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* Team */}
         <section className="about-section">
           <h2>Team & Credits</h2>
           <div className="team-info">
             <p>
-              <strong>Project Lead:</strong> Andrew [Last Name]<br/>
               <strong>Institution:</strong> Amherst College<br/>
-              <strong>Course:</strong> [Course Name & Number]<br/>
-              <strong>Semester:</strong> Fall 2024<br/>
-              <strong>Teammates:</strong> Michael [Last Name], Tyler [Last Name]
+              <strong>Course:</strong> COSC-243 - Natural Language Processing<br/>
+              <strong>Semester:</strong> Fall 2025<br/>
             </p>
             <div className="links">
-              <a href="https://github.com/yourusername/safetylens" className="link-button">
-                <span>⚙</span> View on GitHub
+              <a href="https://github.com/atremante26/SafetyLens" className="link-button">
+                <span>◆</span> View on GitHub
               </a>
             </div>
           </div>
