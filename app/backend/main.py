@@ -2,10 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
-
-from .api.predict import router as predict_router, set_model_loader as set_predict_loader
-from .api.explain import router as explain_router, set_model_loader as set_explain_loader
-from .models.loader import ModelLoader
+import sys
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(
@@ -13,6 +11,18 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Download models on Render startup
+try:
+    from .utils.download_models import setup_models
+    setup_models()
+except Exception as e:
+    logger.warning(f"Model setup issue: {e}")
+    # Continue anyway - models might already be there or it's local dev
+
+from .api.predict import router as predict_router, set_model_loader as set_predict_loader
+from .api.explain import router as explain_router, set_model_loader as set_explain_loader
+from .models.loader import ModelLoader
 
 # Global model loader
 model_loader = None
@@ -26,7 +36,7 @@ async def lifespan(app: FastAPI):
     global model_loader
     
     logger.info("Starting SafetyLens API...")
-    logger.info("Loading models...")
+    logger.info("Loading models into memory...")
     
     try:
         model_loader = ModelLoader()
@@ -36,7 +46,7 @@ async def lifespan(app: FastAPI):
         set_predict_loader(model_loader)
         set_explain_loader(model_loader)
         
-        logger.info("All models loaded successfully!")
+        logger.info("✅ All models loaded successfully!")
         
         yield
         
@@ -56,7 +66,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",              # Local development
-        "https://atremante26.github.io",      # GitHub Pages domain
+        "https://atremante26.github.io",      # GitHub Pages
     ],
     allow_credentials=True,
     allow_methods=["*"],
