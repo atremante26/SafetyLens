@@ -36,17 +36,19 @@ async def lifespan(app: FastAPI):
     global model_loader
     
     logger.info("Starting SafetyLens API...")
-    logger.info("Loading models into memory...")
+    logger.info("Loading LogReg model (transformers will lazy-load on demand)...")
     
     try:
         model_loader = ModelLoader()
-        model_loader.load_all_models()
+        
+        # Only load LogReg on startup (tiny memory footprint)
+        model_loader.load_logreg()
         
         # Inject model loader into API routes
         set_predict_loader(model_loader)
         set_explain_loader(model_loader)
         
-        logger.info("✅ All models loaded successfully!")
+        logger.info("LogReg loaded! Transformers will load on first use (~30 sec each).")
         
         yield
         

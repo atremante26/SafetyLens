@@ -52,8 +52,13 @@ async def explain(request: ExplainRequest):
     """
     model_loader = get_model_loader()
     
+    if model_loader is None:
+        raise HTTPException(status_code=503, detail="Model loader not initialized")
+    
     try:
-        logger.info(f"Explanation request: model={request.model}, method={request.method}")
+        # Load model on demand
+        logger.info(f"Explanation request for model: {request.model}")
+        model_loader.load_model_on_demand(request.model)
         
         # Route based on method
         if request.method == "lime":
@@ -63,7 +68,7 @@ async def explain(request: ExplainRequest):
                 tokens = explainer.explain_logreg(
                     request.text,
                     model_loader.logreg_model,
-                    model_loader.vectorizer,
+                    model_loader.tfidf_vectorizer,  
                     num_features=request.num_features,
                     num_samples=request.n_samples
                 )
@@ -76,7 +81,7 @@ async def explain(request: ExplainRequest):
                     num_samples=request.n_samples,
                     task=None
                 )
-            elif request.model == "multi2":
+            elif request.model == "multitask_2": 
                 tokens = explainer.explain_transformer(
                     request.text,
                     model_loader.multitask_2_model,
@@ -85,7 +90,7 @@ async def explain(request: ExplainRequest):
                     num_samples=request.n_samples,
                     task=request.task
                 )
-            elif request.model == "multi4":
+            elif request.model == "multitask_4":
                 tokens = explainer.explain_transformer(
                     request.text,
                     model_loader.multitask_4_model,
@@ -108,7 +113,7 @@ async def explain(request: ExplainRequest):
             tokens = explainer.explain_logreg(
                 request.text,
                 model_loader.logreg_model,
-                model_loader.vectorizer,
+                model_loader.tfidf_vectorizer,  
                 num_features=request.num_features
             )
         
@@ -129,7 +134,7 @@ async def explain(request: ExplainRequest):
                     n_steps=request.n_steps,
                     task=None
                 )
-            elif request.model == "multi2":
+            elif request.model == "multitask_2": 
                 tokens = explainer.explain_transformer(
                     request.text,
                     model_loader.multitask_2_model,
@@ -137,7 +142,7 @@ async def explain(request: ExplainRequest):
                     n_steps=request.n_steps,
                     task=request.task
                 )
-            elif request.model == "multi4":
+            elif request.model == "multitask_4":
                 tokens = explainer.explain_transformer(
                     request.text,
                     model_loader.multitask_4_model,

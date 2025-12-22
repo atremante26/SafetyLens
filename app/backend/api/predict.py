@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class PredictRequest(BaseModel):
     """Request model for prediction endpoint"""
     text: str
-    model: str  # "logreg" | "singletask" | "multi2" | "multi4"
+    model: str  # "logreg" | "singletask" | "multitask_2" | "multitask_4"
     task: Optional[str] = "Q_overall"
 
 class PredictResponse(BaseModel):
@@ -43,17 +43,25 @@ async def predict(request: PredictRequest):
     try:
         logger.info(f"Prediction request: model={request.model}, text_length={len(request.text)}")
         
+        # Load model on demand (lazy loading)
+        model_loader.load_model_on_demand(request.model)
+        
         # Route to appropriate model
         if request.model == "logreg":
             result = model_loader.predict_logreg(request.text)
         elif request.model == "singletask":
             result = model_loader.predict_singletask(request.text)
-        elif request.model in ["multi2", "multi4"]:
-            num_heads = 2 if request.model == "multi2" else 4
+        elif request.model == "multitask_2":
             result = model_loader.predict_multitask(
                 request.text, 
                 task=request.task, 
-                num_heads=num_heads
+                num_heads=2
+            )
+        elif request.model == "multitask_4":
+            result = model_loader.predict_multitask(
+                request.text, 
+                task=request.task, 
+                num_heads=4
             )
         else:
             raise HTTPException(status_code=400, detail=f"Unknown model: {request.model}")
