@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 # Import MultiTaskRoBERTa from project root
 import importlib.util
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 multi_task_path = PROJECT_ROOT / "models" / "multi_task_transformer.py"
 
 spec = importlib.util.spec_from_file_location("multi_task_transformer", multi_task_path)
