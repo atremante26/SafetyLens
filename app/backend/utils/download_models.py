@@ -14,7 +14,6 @@ MODEL_FILE_IDS = {
 
 def download_file(file_id, destination):
     """Download file from Google Drive using gdown"""
-    
     try:
         
         url = f'https://drive.google.com/uc?id={file_id}'
@@ -44,7 +43,7 @@ def setup_models():
     print("Running on Render - checking models...", flush=True)
     
     # Create models directory
-    models_dir = Path(__file__).parent.parent.parent.parent / "models" / "checkpoints"
+    models_dir = Path(__file__).parent.parent.parent.parent.parent / "models" / "checkpoints"
     models_dir.mkdir(parents=True, exist_ok=True)
     
     print(f"Models directory: {models_dir}", flush=True)
