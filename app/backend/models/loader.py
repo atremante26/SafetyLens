@@ -1,3 +1,4 @@
+import sys
 import torch
 import pickle
 from pathlib import Path
@@ -6,19 +7,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Import MultiTaskRoBERTa from project root
-import importlib.util
-
+# Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
-multi_task_path = PROJECT_ROOT / "models" / "multi_task_transformer.py"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-spec = importlib.util.spec_from_file_location("multi_task_transformer", multi_task_path)
-multi_task_module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(multi_task_module)
-
-MultiTaskRoBERTa = multi_task_module.MultiTaskRoBERTa
-load_model = multi_task_module.load_model
-
+from models.multi_task_transformer import MultiTaskRoBERTa
 
 class ModelLoader:
     """Handles loading and management of all models with lazy loading support"""
@@ -28,7 +22,7 @@ class ModelLoader:
         logger.info(f"Using device: {self.device}")
         
         # Model paths
-        self.models_dir = Path(__file__).parent.parent.parent / "models" / "checkpoints"
+        self.models_dir = Path(__file__).parent.parent.parent.parent.parent / "models" / "checkpoints"
         
         # Initialize all models as None (lazy loading)
         self.logreg_model = None
@@ -42,7 +36,7 @@ class ModelLoader:
         
         # Track which model is currently loaded (for memory management)
         self.currently_loaded_transformer = None
-    
+
     def unload_transformers(self, keep_model=None):
         """Unload transformer models to free memory, optionally keeping one"""
         import gc
