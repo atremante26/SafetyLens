@@ -203,5 +203,43 @@ notebooks/**/*.pdf
 # ============================================================================
 # Keep Directory Structure (Create empty .gitkeep files)
 # ============================================================================
-
 !.gitkeep
+
+# ============================================================================
+# Deployment (Frontend - Node/React)
+# ============================================================================
+
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Frontend build output
+app/frontend/dist/
+app/frontend/build/
+app/frontend/.vite/
+
+# Frontend environment files
+app/frontend/.env
+app/frontend/.env.local
+app/frontend/.env.production.local
+
+# ============================================================================
+# Deployment (Backend - Render)
+# ============================================================================
+
+# Render specific
+.render/
+
+# Production environment
+.env.production
+
+# ============================================================================
+# Git deployment
+# ============================================================================
+
+# GitHub Pages deployment branch
+.gh-pages/

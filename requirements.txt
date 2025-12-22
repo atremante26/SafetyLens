@@ -1,25 +1,31 @@
-# Core ML libraries
-torch>=2.0.0
-transformers>=4.30.0
-scikit-learn>=1.3.0
+# WEB FRAMEWORK
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
 
-# Data handling
-pandas>=2.0.0
-numpy>=1.24.0
+# ML & DEEP LEARNING 
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.1.0+cpu
+transformers==4.35.0
+scikit-learn==1.3.2
+numpy==1.24.3
+pandas==2.0.0
+
+# EXPLAINABILITY
+lime==0.2.0.1
+shap==0.43.0
+captum==0.6.0
+
+# DATA & UTILITIES
 datasets>=2.14.0
-gensim
-
-# Visualization
-matplotlib>=3.7.0
-seaborn>=0.12.0
-
-# Explainability
-captum>=0.6.0
-shap>=0.42.0
-lime>=0.2.0
-
-# Utilities
-tqdm>=4.65.0
-jupyter>=1.0.0
-notebook>=6.5.0
 scipy>=1.10.0
+tqdm==4.65.0
+python-dotenv==1.0.0
+
+# DEVELOPMENT
+# jupyter>=1.0.0
+# notebook>=6.5.0
+# matplotlib>=3.7.0
+# seaborn>=0.12.0
+# gensim

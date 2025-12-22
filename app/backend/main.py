@@ -54,7 +54,10 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",              # Local development
+        "https://atremante26.github.io",      # GitHub Pages domain
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
