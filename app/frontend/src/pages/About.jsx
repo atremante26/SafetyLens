@@ -1,26 +1,17 @@
+import { useState, useEffect } from 'react'
+
 function About() {
   return (
     <div className="about-page">
-      <div className="about-header">
-        <h1>
-          <span className="logo-icon">◆</span>
-          About
-        </h1>
-        <p className="subtitle">Multi-Model Content Safety Detection Research</p>
-      </div>
-
       <div className="about-content">
         {/* Project Overview */}
         <section className="about-section">
           <h2>Project Overview</h2>
           <p>
-            SafetyLens is a comprehensive research project exploring explainable AI 
-            for content safety detection. We compare three model architectures—logistic 
-            regression, single-task transformers, and multi-task transformers—to understand 
-            the tradeoffs between model complexity, performance, and interpretability.
+            SafetyLens is a research project exploring explainable AI for content safety detection. We compare three model architectures—logistic regression, single-task transformers, and multi-task transformers—to examine tradeoffs between model complexity, predictive performance, and interpretability.
           </p>
           <p>
-            This project was completed as part of COSC-243 - Natural Language Processing at Amherst College in Fall 2025.
+            This project was completed as part of COSC-243: Natural Language Processing at Amherst College (Fall 2025).
           </p>
         </section>
 
@@ -53,7 +44,7 @@ function About() {
               rel="noopener noreferrer"
               className="dataset-link"
             >
-              DICES-350
+              DICES-350<span className="external-link-icon">↗</span>
             </a>
           </h2>
           <p>
@@ -64,57 +55,102 @@ function About() {
           <div className="dataset-stats">
             <div className="stat-card">
               <div className="stat-value">350</div>
-              <div className="stat-label">Conversations</div>
+              <div className="stat-label">Unique Conversations</div>
             </div>
             <div className="stat-card">
               <div className="stat-value">4</div>
               <div className="stat-label">Safety Dimensions</div>
             </div>
             <div className="stat-card">
-              <div className="stat-value">~10%</div>
-              <div className="stat-label">Unsafe Examples</div>
+              <div className="stat-value">43,050</div>
+              <div className="stat-label">Individual Ratings</div>
             </div>
           </div>
         </section>
 
-
         {/* Model Performance */}
         <section className="about-section">
           <h2>Model Performance</h2>
+
           <div className="performance-table">
             <table>
               <thead>
                 <tr>
                   <th>Model</th>
-                  <th>Architecture</th>
-                  <th>F1 Score</th>
-                  <th>Key Finding</th>
+                  <th>Task</th>
+                  <th>F1</th>
+                  <th>PR-AUC</th>
+                  <th>Pos %</th>
                 </tr>
               </thead>
+
               <tbody>
+                {/* Q_overall */}
                 <tr>
                   <td>Logistic Regression</td>
-                  <td>TF-IDF + LogReg</td>
+                  <td>Q_overall</td>
                   <td>0.422</td>
-                  <td>Fast baseline</td>
+                  <td>0.414</td>
+                  <td>35.1%</td>
                 </tr>
                 <tr>
-                  <td>Single-Task RoBERTa</td>
-                  <td>Binary Classifier</td>
+                  <td>Single-Task</td>
+                  <td>Q_overall</td>
                   <td>0.543</td>
-                  <td>Best performance</td>
+                  <td>0.660</td>
+                  <td>34.1%</td>
                 </tr>
                 <tr>
-                  <td>Multi-Task (2 heads)</td>
-                  <td>Shared Encoder</td>
+                  <td>Multi-Task (2 Heads)</td>
+                  <td>Q_overall</td>
                   <td>0.469</td>
-                  <td>Shared learning</td>
+                  <td>0.366</td>
+                  <td>32.4%</td>
                 </tr>
                 <tr>
-                  <td>Multi-Task (4 heads)</td>
-                  <td>Shared Encoder</td>
+                  <td>Multi-Task (4 Heads)</td>
+                  <td>Q_overall</td>
                   <td>0.461</td>
-                  <td>Multi-dimensional</td>
+                  <td>0.370</td>
+                  <td>32.4%</td>
+                </tr>
+
+                {/* Divider */}
+                <tr className="group-divider" aria-hidden="true"><td colSpan={5} /></tr>
+
+                {/* Q2_harmful */}
+                <tr>
+                  <td>Multi-Task (2 Heads)</td>
+                  <td>Q2_harmful</td>
+                  <td>0.426</td>
+                  <td>0.345</td>
+                  <td>17.7%</td>
+                </tr>
+                <tr>
+                  <td>Multi-Task (4 Heads)</td>
+                  <td>Q2_harmful</td>
+                  <td>0.414</td>
+                  <td>0.422</td>
+                  <td>17.7%</td>
+                </tr>
+
+                {/* Divider */}
+                <tr className="group-divider" aria-hidden="true"><td colSpan={5} /></tr>
+
+                {/* Rare tasks */}
+                <tr>
+                  <td>Multi-Task (4 Heads)</td>
+                  <td>Q3_bias</td>
+                  <td>0.322</td>
+                  <td>0.201</td>
+                  <td>9.8%</td>
+                </tr>
+                <tr>
+                  <td>Multi-Task (4 Heads)</td>
+                  <td>Q6_policy</td>
+                  <td>0.282</td>
+                  <td>0.163</td>
+                  <td>10.0%</td>
                 </tr>
               </tbody>
             </table>
@@ -129,24 +165,21 @@ function About() {
               <div className="finding-icon">◈</div>
               <h3>Model Complexity ≠ Performance</h3>
               <p>
-                Single-task RoBERTa outperformed multi-task variants, suggesting 
-                that architectural complexity doesn't always improve results.
+                Single-task RoBERTa outperformed multi-task variants on overall safety detection, indicating that added architectural complexity did not improve performance under severe class imbalance.
               </p>
             </div>
             <div className="finding-card">
               <div className="finding-icon">⊙</div>
               <h3>Class Imbalance Matters</h3>
               <p>
-                Severe class imbalance hurt multi-task model 
-                convergence and generalization.
+                Severe class imbalance disproportionately degraded multi-task performance, especially on rare safety dimensions such as bias and policy violations.
               </p>
             </div>
             <div className="finding-card">
               <div className="finding-icon">⚙</div>
               <h3>Explainability Insights</h3>
               <p>
-                LIME, SHAP, and Integrated Gradients provide complementary 
-                views of model decision-making.
+                Integrated Gradients provided the most reliable token-level explanations for transformer models, while LIME offered qualitative contrast and SHAP proved effective primarily for linear baselines.
               </p>
             </div>
           </div>
@@ -159,7 +192,7 @@ function About() {
             <a href="/paper.pdf" className="download-card" download>
               <div className="download-icon">▣</div>
               <div className="download-info">
-                <h3>Research Paper</h3>
+                <h3>Paper</h3>
                 <p>Full technical report (PDF)</p>
               </div>
               <span className="download-arrow">→</span>
@@ -167,7 +200,7 @@ function About() {
             <a href="/poster.pdf" className="download-card" download>
               <div className="download-icon">▦</div>
               <div className="download-info">
-                <h3>Research Poster</h3>
+                <h3>Poster</h3>
                 <p>Conference-style poster (PDF)</p>
               </div>
               <span className="download-arrow">→</span>
@@ -177,11 +210,11 @@ function About() {
 
         {/* Team */}
         <section className="about-section">
-          <h2>Team & Credits</h2>
+          <h2>Credits</h2>
           <div className="team-info">
             <p>
               <strong>Institution:</strong> Amherst College<br/>
-              <strong>Course:</strong> COSC-243 - Natural Language Processing<br/>
+              <strong>Course:</strong> COSC-243: Natural Language Processing<br/>
               <strong>Semester:</strong> Fall 2025<br/>
             </p>
             <div className="links">

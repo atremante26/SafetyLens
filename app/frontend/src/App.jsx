@@ -38,7 +38,7 @@ function App() {
               <span className="logo-icon">◆</span>
               SafetyLens
             </h1>
-            <p>Multi-Model Content Safety Detection with Explainable AI</p>
+            <p>Content Safety Detection with Explainable Models</p>
           </div>
           
           <div className="header-bottom">
