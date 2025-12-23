@@ -5,6 +5,9 @@ import ModelStage from '../components/ModelStage'
 import PredictionStage from '../components/PredictionStage'
 import ExplainStage from '../components/ExplainStage'
 
+// Use environment variable for API URL
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 function Home() {
   const [text, setText] = useState('')
   const [selectedModel, setSelectedModel] = useState('logreg')
@@ -35,7 +38,7 @@ function Home() {
     const loadingToast = toast.loading('Analyzing safety...')
     
     try {
-      const response = await fetch('http://localhost:8000/api/predict', {
+      const response = await fetch(`${API_URL}/api/predict`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -77,7 +80,7 @@ function Home() {
     const loadingToast = toast.loading('Computing attributions...')
     
     try {
-      const response = await fetch('http://localhost:8000/api/explain', {
+      const response = await fetch(`${API_URL}/api/explain`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

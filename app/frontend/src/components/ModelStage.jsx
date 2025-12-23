@@ -87,7 +87,10 @@ function ModelStage({
         {isLoading ? (
           <>
             <span className="spinner"></span>
-            Analyzing...
+            {selectedModel === 'logreg' 
+              ? 'Analyzing...'
+              : 'Loading model... (30s first time, then instant)'
+            }
           </>
         ) : (
           'Predict Safety →'
