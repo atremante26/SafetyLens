@@ -1,17 +1,15 @@
 from lime.lime_text import LimeTextExplainer
 import numpy as np
+import torch
 
 class LIMEExplainer:
     """Wrapper for LIME text explanations"""
-    
     def __init__(self):
         self.explainer = LimeTextExplainer(class_names=['Safe', 'Unsafe'])
     
     def explain_logreg(self, text, model, vectorizer, num_features=10, num_samples=500):
         """
-        Explain logistic regression prediction
-        
-        Returns: List of (token, attribution) tuples
+        Explain logistic regression prediction.
         """
         def predict_proba(texts):
             X = vectorizer.transform(texts)
@@ -35,20 +33,8 @@ class LIMEExplainer:
     
     def explain_transformer(self, text, model, tokenizer, num_features=10, num_samples=500, task='Q_overall'):
         """
-        Explain transformer prediction (single-task or multi-task)
-        
-        Args:
-            text: Input text
-            model: Model instance
-            tokenizer: Tokenizer instance
-            num_features: Number of features to explain
-            num_samples: Number of samples for LIME
-            task: Task name (for multi-task models)
-        
-        Returns: List of (token, attribution) tuples
+        Explain transformer prediction (single-task or multi-task).
         """
-        import torch
-        
         device = next(model.parameters()).device
         
         # Check if this is a multi-task model
@@ -67,14 +53,14 @@ class LIMEExplainer:
                 
                 with torch.no_grad():
                     if is_multitask:
-                        # Multi-task model returns dict of logits
+                        # Multi-task model returns dict of single logits
                         logits_dict = model(
                             input_ids=inputs['input_ids'],
                             attention_mask=inputs['attention_mask']
                         )
                         
-                        # Get logit for specified task
-                        logit = logits_dict[task]  # Shape: (batch_size, 1)
+                        # Get logit for specified task - Shape: (batch_size, 1)
+                        logit = logits_dict[task]
                         prob_unsafe = torch.sigmoid(logit).squeeze().item()
                         probs = torch.tensor([[1 - prob_unsafe, prob_unsafe]])
                     else:

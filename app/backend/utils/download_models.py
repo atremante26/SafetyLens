@@ -15,7 +15,6 @@ MODEL_FILE_IDS = {
 def download_file(file_id, destination):
     """Download file from Google Drive using gdown"""
     try:
-        
         url = f'https://drive.google.com/uc?id={file_id}'
         gdown.download(url, str(destination), quiet=False, fuzzy=True)
         
@@ -24,6 +23,7 @@ def download_file(file_id, destination):
             print(f"Download failed or file is empty", flush=True)
             return False
         
+        # Calculate size
         size_mb = destination.stat().st_size / (1024 * 1024)
         print(f"Downloaded {destination.name} ({size_mb:.1f} MB)", flush=True)
         return True

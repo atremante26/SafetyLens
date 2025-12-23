@@ -1,29 +1,17 @@
-"""
-Integrated Gradients explainer for transformers
-"""
-
 import torch
 from captum.attr import LayerIntegratedGradients
 import numpy as np
+import logging
+logger = logging.getLogger(__name__)
 
 class IGExplainer:
     """Wrapper for Integrated Gradients explanations"""
-    
     def __init__(self):
         pass
     
-    def explain_transformer(self, text, model, tokenizer, n_steps=25, task='Q_overall'):
+    def explain_transformer(self, text, model, tokenizer, n_steps=25, num_features=10, task='Q_overall'):
         """
-        Explain transformer prediction using Integrated Gradients
-        
-        Args:
-            text: Input text
-            model: Model instance
-            tokenizer: Tokenizer instance
-            n_steps: Number of integration steps
-            task: Task name (for multi-task models)
-        
-        Returns: List of (token, attribution) tuples
+        Explain transformer prediction using Integrated Gradients.
         """
         device = next(model.parameters()).device
         
@@ -46,11 +34,10 @@ class IGExplainer:
         # Define forward function for IG
         def forward_func(input_ids, attention_mask):
             if is_multitask:
-                # Multi-task model
+                # Multi-task model returns dict: {'Q_overall': tensor([[logit]]), ...}
                 logits_dict = model(input_ids=input_ids, attention_mask=attention_mask)
                 logit = logits_dict[task]  # Shape: (batch_size, 1)
-                # Return as batch dimension preserved
-                return logit.squeeze(-1)  # Remove last dimension only: (batch_size,)
+                return logit.squeeze(-1)  # Return shape: (batch_size,)
             else:
                 # Single-task model
                 outputs = model(input_ids=input_ids, attention_mask=attention_mask)
@@ -71,8 +58,7 @@ class IGExplainer:
                 return_convergence_delta=True
             )
         except Exception as e:
-            print(f"⚠️ IG attribution failed: {e}")
-            print(f"   Trying without convergence delta...")
+            logger.warning(f"IG attribution failed: {e}. Trying without convergence delta...")
             # Fallback: compute without delta
             attributions = lig.attribute(
                 inputs=(input_ids, attention_mask),
@@ -109,4 +95,4 @@ class IGExplainer:
         # Sort by absolute attribution
         results.sort(key=lambda x: abs(x['attribution']), reverse=True)
         
-        return results[:10]  # Top 10
+        return results[:num_features] 

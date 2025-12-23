@@ -1,3 +1,5 @@
+import os
+import gc
 import sys
 import torch
 import pickle
@@ -7,8 +9,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Add project root to path
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
+# Detect if running on Render vs locally
+IS_RENDER = os.getenv('RENDER') is not None
+
+# Set project root
+if IS_RENDER:
+    # On Render: /opt/render/project/src/app/backend/models/loader.py
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
+else:
+    # Locally: SafetyLens/app/backend/models/loader.py
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -22,7 +33,7 @@ class ModelLoader:
         logger.info(f"Using device: {self.device}")
         
         # Model paths
-        self.models_dir = Path(__file__).parent.parent.parent.parent.parent / "models" / "checkpoints"
+        self.models_dir = PROJECT_ROOT / "models" / "checkpoints"
         
         # Initialize all models as None (lazy loading)
         self.logreg_model = None
@@ -39,26 +50,37 @@ class ModelLoader:
 
     def unload_transformers(self, keep_model=None):
         """Unload transformer models to free memory, optionally keeping one"""
-        import gc
         
         if keep_model != 'singletask' and self.singletask_model is not None:
             logger.info("Unloading Single-Task model to free memory")
+
+            # Delete references to allow garbage collection
             del self.singletask_model
             del self.singletask_tokenizer
+
+            # Set attributes to None 
             self.singletask_model = None
             self.singletask_tokenizer = None
         
         if keep_model != 'multitask_2' and self.multitask_2_model is not None:
             logger.info("Unloading Multi-Task-2 model to free memory")
+
+            # Delete references to allow garbage collection
             del self.multitask_2_model
             del self.multitask_2_tokenizer
+
+            # Set attributes to None 
             self.multitask_2_model = None
             self.multitask_2_tokenizer = None
         
         if keep_model != 'multitask_4' and self.multitask_4_model is not None:
             logger.info("Unloading Multi-Task-4 model to free memory")
+
+            # Delete references to allow garbage collection
             del self.multitask_4_model
             del self.multitask_4_tokenizer
+
+            # Set attributes to None 
             self.multitask_4_model = None
             self.multitask_4_tokenizer = None
         
@@ -70,7 +92,7 @@ class ModelLoader:
         """Load a specific model on demand, unloading others to save memory"""
         logger.info(f"Ensuring {model_name} is loaded...")
         
-        # LogReg is always loaded (tiny memory footprint)
+        # LogReg is always loaded (limited memory)
         if model_name == 'logreg':
             if self.logreg_model is None:
                 self.load_logreg()
@@ -80,8 +102,14 @@ class ModelLoader:
         if model_name == 'singletask':
             if self.singletask_model is None:
                 logger.info("Loading Single-Task model (this may take 20-30 seconds)...")
+
+                # Unload other models
                 self.unload_transformers(keep_model='singletask')
+
+                # Load singletask
                 self.load_singletask()
+
+                # Update currently loaded
                 self.currently_loaded_transformer = 'singletask'
                 logger.info("Single-Task model loaded and ready")
             else:
@@ -90,8 +118,14 @@ class ModelLoader:
         elif model_name == 'multitask_2':
             if self.multitask_2_model is None:
                 logger.info("Loading Multi-Task-2 model (this may take 20-30 seconds)...")
+
+                # Unload other models
                 self.unload_transformers(keep_model='multitask_2')
+
+                # Load multitask (2 heads)
                 self.load_multitask_2()
+
+                # Update currently loaded
                 self.currently_loaded_transformer = 'multitask_2'
                 logger.info("Multi-Task-2 model loaded and ready")
             else:
@@ -100,8 +134,14 @@ class ModelLoader:
         elif model_name == 'multitask_4':
             if self.multitask_4_model is None:
                 logger.info("Loading Multi-Task-4 model (this may take 20-30 seconds)...")
+                
+                # Unload other models
                 self.unload_transformers(keep_model='multitask_4')
+
+                # Load multitask (4 heads)
                 self.load_multitask_4()
+
+                # Update currently loaded
                 self.currently_loaded_transformer = 'multitask_4'
                 logger.info("Multi-Task-4 model loaded and ready")
             else:
@@ -145,8 +185,17 @@ class ModelLoader:
                 num_labels=2
             )
             
-            # Load weights
-            self.singletask_model.load_state_dict(checkpoint['model_state_dict'])
+            # Load weights (handle different checkpoint formats)
+            if 'model_state_dict' in checkpoint:
+                # Standard format
+                self.singletask_model.load_state_dict(checkpoint['model_state_dict'])
+            elif 'state_dict' in checkpoint:
+                # Alternative format
+                self.singletask_model.load_state_dict(checkpoint['state_dict'])
+            else:
+                # Checkpoint might be the state dict itself
+                self.singletask_model.load_state_dict(checkpoint)
+            
             self.singletask_model.to(self.device)
             self.singletask_model.eval()
             
@@ -168,7 +217,7 @@ class ModelLoader:
             self.multitask_2_tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
             
             # Initialize model
-            self.multitask_2_model = MultiTaskRoBERTa(num_tasks=2)
+            self.multitask_2_model = MultiTaskRoBERTa(tasks=['Q_overall', 'Q2_harmful'])
             
             # Load weights
             self.multitask_2_model.load_state_dict(checkpoint['model_state_dict'])
@@ -193,7 +242,7 @@ class ModelLoader:
             self.multitask_4_tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
             
             # Initialize model
-            self.multitask_4_model = MultiTaskRoBERTa(num_tasks=4)
+            self.multitask_4_model = MultiTaskRoBERTa(tasks=['Q_overall', 'Q2_harmful', 'Q3_bias', 'Q6_policy'])
             
             # Load weights
             self.multitask_4_model.load_state_dict(checkpoint['model_state_dict'])
@@ -205,3 +254,99 @@ class ModelLoader:
         except Exception as e:
             logger.error(f"Failed to load Multi-Task-4 model: {e}")
             raise
+
+    def predict_logreg(self, text: str) -> dict:
+        """Make prediction using logistic regression"""
+        if self.logreg_model is None:
+            raise ValueError("LogReg model not loaded")
+        
+        # Vectorize text
+        X = self.tfidf_vectorizer.transform([text])
+        
+        # Get prediction and probability
+        prediction = self.logreg_model.predict(X)[0]
+        probability = self.logreg_model.predict_proba(X)[0]
+        
+        return {
+            "prediction": int(prediction),
+            "probability": float(probability[1]),  # Probability of unsafe class
+            "label": "Unsafe" if prediction == 1 else "Safe"
+        }
+    
+    def predict_singletask(self, text: str) -> dict:
+        """Make prediction using single-task model"""
+        if self.singletask_model is None:
+            raise ValueError("Single-task model not loaded")
+        
+        # Tokenize
+        inputs = self.singletask_tokenizer(
+            text,
+            return_tensors="pt",
+            truncation=True,
+            max_length=512,
+            padding=True
+        )
+        
+        # Move to device
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        
+        # Get prediction
+        with torch.no_grad():
+            outputs = self.singletask_model(**inputs)
+            logits = outputs.logits
+            probs = torch.softmax(logits, dim=-1)
+            prediction = torch.argmax(logits, dim=-1).item()
+            probability = probs[0][1].item()  # Probability of unsafe class
+        
+        return {
+            "prediction": int(prediction),
+            "probability": float(probability),
+            "label": "Unsafe" if prediction == 1 else "Safe"
+        }
+    
+    def predict_multitask(self, text: str, task: str, num_heads: int) -> dict:
+        """Make prediction using multi-task model"""
+        
+        # Select correct model
+        if num_heads == 2:
+            model = self.multitask_2_model
+            tokenizer = self.multitask_2_tokenizer
+        elif num_heads == 4:
+            model = self.multitask_4_model
+            tokenizer = self.multitask_4_tokenizer
+        else:
+            raise ValueError(f"Invalid num_heads: {num_heads}")
+        
+        if model is None:
+            raise ValueError(f"Multi-task {num_heads} model not loaded")
+        
+        # Validate task
+        if task not in ['Q_overall', 'Q2_harmful', 'Q3_bias', 'Q6_policy']:
+            raise ValueError(f"Invalid task: {task}")
+        
+        # Tokenize
+        inputs = tokenizer(
+            text,
+            return_tensors="pt",
+            truncation=True,
+            max_length=512,
+            padding=True
+        )
+        
+        # Move to device
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        
+        # Get prediction
+        with torch.no_grad():
+            outputs = model(**inputs) 
+            logit = outputs[task]  
+            
+            # Single output with sigmoid (BCEWithLogitsLoss style)
+            probability = torch.sigmoid(logit).squeeze().item() 
+            prediction = 1 if probability > 0.5 else 0
+        
+        return {
+            "prediction": int(prediction),
+            "probability": float(probability),
+            "label": "Unsafe" if prediction == 1 else "Safe"
+        }

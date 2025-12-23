@@ -1,12 +1,8 @@
-"""
-SHAP explainer for logistic regression
-"""
-
 import shap
 import numpy as np
 
 class SHAPExplainer:
-    """Wrapper for SHAP explanations (LogReg only)"""
+    """Wrapper for SHAP explanations (Logistic Regression only)"""
     def __init__(self):
         pass
     

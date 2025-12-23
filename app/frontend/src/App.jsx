@@ -70,6 +70,10 @@ function App() {
         </Routes>
 
         <footer>
+          <p className="tech-note">
+            <span className="logo-icon">⚡</span>
+            Note: Transformer models load on-demand (~30s first use, then instant).
+          </p>
           <p>© 2025 SafetyLens</p>
         </footer>
       </div>
