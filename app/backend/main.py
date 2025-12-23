@@ -68,7 +68,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",              # Local development
-        "https://atremante26.github.io",      # GitHub Pages
+        "https://atremante26.github.io",      # GitHub Pages (base domain)
+        "https://atremante26.github.io/SafetyLens",  # GitHub Pages (with path)
     ],
     allow_credentials=True,
     allow_methods=["*"],
