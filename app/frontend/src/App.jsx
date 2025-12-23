@@ -6,7 +6,7 @@ import About from './pages/About'
 
 function App() {
   return (
-    <Router>
+    <Router basename="/SafetyLens">  {/* ← ADD basename HERE */}
       <div className="app">
         <Toaster 
           position="top-right"
