@@ -1,0 +1,245 @@
+# ============================================================================
+# Python
+# ============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.log
+
+# Virtual environments
+venv/
+env/
+ENV/
+safetylens/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# ============================================================================
+# Data
+# ============================================================================
+
+# Ignore raw data except metadata
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/README.md
+
+# Track processed data explicitly
+data/processed/*
+!data/processed/.gitkeep
+!data/processed/README.md
+!data/processed/*.csv
+!data/processed/*.png
+
+# ============================================================================
+# Models & Checkpoints
+# ============================================================================
+
+# Ignore all model files by default
+models/**/*.pt
+models/**/*.pth
+models/**/*.bin
+models/**/*.safetensors
+models/**/*.ckpt
+models/**/*.pkl
+
+# Keep directory structure
+!models/.gitkeep
+!models/checkpoints/.gitkeep
+
+# Allow specific final checkpoints (uncomment to track these)
+# !models/checkpoints/best_singletask.pt
+# !models/checkpoints/best_multitask_2.pt
+# !models/checkpoints/best_multitask_4.pt
+# !models/checkpoints/best_logreg.pkl
+# !models/checkpoints/tfidf_vectorizer.pkl
+
+# ============================================================================
+# Results
+# ============================================================================
+
+# Ignore large intermediate results
+results/predictions/
+!results/predictions/.gitkeep
+
+# Keep evaluation results and figures
+!results/evaluation/
+!results/evaluation/**/*.csv
+!results/evaluation/**/*.json
+!results/evaluation/.gitkeep
+
+!results/figures/
+!results/figures/**/*.png
+!results/figures/**/*.pdf
+!results/figures/.gitkeep
+
+# Keep explainability results
+!results/explainability/
+!results/explainability/**/*.csv
+!results/explainability/.gitkeep
+!results/explainability/ig/
+!results/explainability/ig/**/*.csv
+!results/explainability/lime/
+!results/explainability/lime/**/*.csv
+!results/explainability/shap/
+!results/explainability/shap/**/*.csv
+
+# Keep README files
+!results/README.md
+!results/**/README.md
+
+# ============================================================================
+# Operating System
+# ============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+
+# ============================================================================
+# IDE & Editor
+# ============================================================================
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# ============================================================================
+# Temporary & Cache
+# ============================================================================
+
+# General temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.orig
+
+# LaTeX temporary files
+*.aux
+*.out
+*.toc
+*.bbl
+*.blg
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+
+# ============================================================================
+# Project Specific
+# ============================================================================
+
+# Ignore uploaded user files in test directories
+test_uploads/
+
+# Ignore local configuration
+.env
+.env.local
+config.local.yaml
+
+# Ignore large CSVs except specific ones
+*.csv
+!data/processed/*.csv
+!results/evaluation/**/*.csv
+!results/explainability/**/*.csv
+
+# Ignore notebook outputs
+notebooks/**/*.html
+notebooks/**/*.pdf
+
+# ============================================================================
+# Keep Directory Structure (Create empty .gitkeep files)
+# ============================================================================
+!.gitkeep
+
+# ============================================================================
+# Deployment (Frontend - Node/React)
+# ============================================================================
+
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Frontend build output
+app/frontend/dist/
+app/frontend/build/
+app/frontend/.vite/
+
+# Frontend environment files
+app/frontend/.env
+app/frontend/.env.local
+app/frontend/.env.production.local
+
+# ============================================================================
+# Deployment (Backend - Render)
+# ============================================================================
+
+# Render specific
+.render/
+
+# Production environment
+.env.production
+
+# ============================================================================
+# Git deployment
+# ============================================================================
+
+# GitHub Pages deployment branch
+.gh-pages/
