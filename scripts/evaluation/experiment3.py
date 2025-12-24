@@ -218,16 +218,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-"""
-Usage:
-    python scripts/evaluation/experiment3.py \
-        --ig_results results/evaluation/experiment3_multi4.csv \
-        --metric concentration \
-        --output results/evaluation/experiment3/experiment3_multi4_summary.csv
-
-    python scripts/evaluation/experiment3.py \
-    --ig_results results/evaluation/experiment3_single.csv \
-    --metric concentration \
-    --output results/evaluation/experiment3/experiment3_single_summary.csv     
-"""

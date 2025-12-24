@@ -267,11 +267,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-"""
-# Experiment 1: All models, all tasks
-python scripts/evaluation/experiment1_2.py --experiment 1
-
-# Experiment 2: Comparison study (2-head vs 4-head)
-python scripts/evaluation/experiment1_2.py --experiment 2
-"""

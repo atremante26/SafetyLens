@@ -92,30 +92,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    
-""" 
-python scripts/explainability/run_shap.py \
-    --ckpt models/checkpoints/best_multitask_4.pt \
-    --data_csv data/processed/dices_350_binary.csv \
-    --model_type multitask \
-    --task Q_overall \
-    --out_csv results/explainability/shap/multi_shap_q_overall.csv
-
-python scripts/explainability/run_shap.py \
-    --ckpt models/checkpoints/best_singletask.pt \
-    --data_csv data/processed/dices_350_binary.csv \
-    --model_type singletask \
-    --task Q_overall \
-    --out_csv results/explainability/shap/single_shap_q_overall.csv
-
-python scripts/explainability/run_shap.py \
-    --ckpt models/checkpoints/logistic_regression_model.pkl \
-    --data_csv data/processed/dices_350_binary.csv \
-    --vectorizer models/checkpoints/tfidf_vectorizer.pkl \
-    --model_type logreg \
-    --task Q_overall \
-    --out_csv results/explainability/shap/logreg_shap_q_overall.csv
-   
-   
-"""

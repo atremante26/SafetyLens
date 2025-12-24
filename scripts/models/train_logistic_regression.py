@@ -33,10 +33,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-'''
-Example:
-python scripts/models/train_logistic_regression.py \
-  --mod_out models/checkpoints/logistic_regression_model.pkl \
-  --preds_out results/predictions/logistic_regression/test_preds.csv
-'''

@@ -332,34 +332,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-"""
-Usage:
-NORMAL:
-python scripts/explainability/run_integrated_gradients.py \
-    --checkpoint models/checkpoints/best_singletask.pt \
-    --model_type singletask \
-    --task Q_overall \
-    --n_samples 10
-    --output_dir results/explainability/ig/ig_single_q.csv
-
-#EXPERIMENT 3:
-# Single-task on Q_overall
-python scripts/explainability/run_integrated_gradients.py \
-    --checkpoint models/checkpoints/best_singletask.pt \
-    --model_type singletask \
-    --task Q_overall \
-    --n_samples 30 \
-    --confidence_split high_vs_borderline \
-    --n_steps 50 \
-    --output_dir results/evaluation/experiment3/experiment3_single.csv
-
-# Multi-task-4 on Q_overall  
-python scripts/explainability/run_integrated_gradients.py \
-    --checkpoint models/checkpoints/best_multitask_4.pt \
-    --model_type multitask \
-    --task Q_overall \
-    --n_samples 30 \
-    --confidence_split high_vs_borderline \
-    --n_steps 50 \
-    --output_dir results/evaluation/experiment3/experiment3_multi4.csv
-"""

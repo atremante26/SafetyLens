@@ -284,10 +284,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-'''
-python scripts/models/train_singletask.py \
-    --ckpt_out models/checkpoints/best_singletask.pt \
-    --preds_out results/predictions/single_task_transformer/test_preds.csv
-'''

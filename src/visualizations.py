@@ -529,7 +529,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-'''
-python src/visualizations.py
-'''
