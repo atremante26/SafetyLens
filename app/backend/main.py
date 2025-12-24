@@ -2,8 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
-import sys
-from pathlib import Path
+import os 
 
 # Configure logging
 logging.basicConfig(
@@ -36,19 +35,45 @@ async def lifespan(app: FastAPI):
     global model_loader
     
     logger.info("Starting SafetyLens API...")
-    logger.info("Loading LogReg model (transformers will lazy-load on demand)...")
+    
+    # Check if running in Docker with all models
+    load_all = os.getenv('LOAD_ALL_MODELS', 'false').lower() == 'true'
     
     try:
         model_loader = ModelLoader()
         
-        # Only load LogReg on startup (tiny memory footprint)
-        model_loader.load_logreg()
+        if load_all:
+            # Docker mode - load everything at startup
+            logger.info("Docker mode detected - loading ALL models at startup...")
+            logger.info("This may take 30-60 seconds...")
+            
+            model_loader.load_logreg()
+            logger.info("✓ LogReg loaded")
+            
+            model_loader.load_singletask()
+            logger.info("✓ Single-Task loaded")
+            
+            model_loader.load_multitask_2()
+            logger.info("✓ Multi-Task-2 loaded")
+            
+            model_loader.load_multitask_4()
+            logger.info("✓ Multi-Task-4 loaded")
+            
+            logger.info("All models loaded! Predictions will be instant.")
+        else:
+            # Production mode - lazy loading
+            logger.info("Production mode - using lazy loading...")
+            logger.info("Loading LogReg only (transformers will lazy-load on demand)...")
+            
+            model_loader.load_logreg()
+            
+            logger.info("LogReg loaded! Transformers will load on first use (~30 sec each).")
         
         # Inject model loader into API routes
         set_predict_loader(model_loader)
         set_explain_loader(model_loader)
         
-        logger.info("LogReg loaded! Transformers will load on first use (~30 sec each).")
+        logger.info("SafetyLens API ready!")
         
         yield
         
