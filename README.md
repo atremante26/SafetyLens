@@ -222,17 +222,17 @@ SafetyLens/
 │   │   │   └── download_models.py
 │   │   ├── main.py                # FastAPI entry point
 │   │   └── requirements.txt
-│   ├── frontend/                  # React + Vite frontend
-│   │   ├── src/
-│   │   │   ├── components/        # UI stages (input, model, explain, output)
-│   │   │   └── pages/             # Home / About pages
-│   │   ├── public/                # Static assets
-│   │   │   ├── paper.pdf
-│   │   │   └── poster.pdf
-│   │   ├── index.html
-│   │   ├── vite.config.js
-│   │   └── package.json
-│   └── docker-compose.yaml
+│   └── frontend/                  # React + Vite frontend
+│       ├── src/
+│       │   ├── components/        # UI stages (input, model, explain, output)
+│       │   └── pages/             # Home / About pages
+│       ├── public/                # Static assets
+│       │   ├── paper.pdf
+│       │   └── poster.pdf
+│       ├── index.html
+│       ├── vite.config.js
+│       └── package.json
+│   
 │
 ├── data/
 │   ├── raw/                       # Original DICES-350 dataset
@@ -293,13 +293,14 @@ SafetyLens/
 │   │   └── lime/
 │   └── predictions/               # Test-set predictions
 │
-├── utils/                         # Shared utilities
+├── src/                         
 │   ├── data_preprocessing.py
-│   ├── paths.py
+│   ├── utils/paths.py             # Shared utilities
 │   └── visualizations.py
 │
 ├── Dockerfile
 ├── docker-start.sh
+├── docker-compose.yaml
 ├── render.yaml
 ├── requirements.txt
 ├── LICENSE
