@@ -1,3 +1,5 @@
+<div align="center">
+
 # SafetyLens
 
 **Content Safety Detection with Explainable Models**
@@ -5,6 +7,8 @@
 Research project comparing model architectures and explainability methods for content safety classification in conversational AI contexts.
 
 **[Live Demo](https://atremante26.github.io/SafetyLens/)** | **[Paper](docs/paper.pdf)** | **[Poster](docs/poster.pdf)**
+
+</div>
 
 <p align="center">
   <img src="docs/safetylens_app_demo.png" alt="SafetyLens App Demo" width="800"/>
